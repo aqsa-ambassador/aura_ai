@@ -71,9 +71,46 @@
               <span class="user-badge">Free Plan</span>
             </div>
           </div>
-          <button class="settings-btn" id="theme-toggle" title="Settings / Toggle Theme" aria-label="Settings">
+          <button class="settings-btn" id="open-settings-btn" title="Settings" aria-label="Settings">
             ⚙️
           </button>
+        </div>
+      </div>
+
+      <!-- Settings modal -->
+      <div class="settings-overlay" id="settings-overlay">
+        <div class="settings-panel">
+          <div class="settings-panel-header">
+            <span>Settings</span>
+            <button class="icon-btn" id="close-settings-btn" aria-label="Close settings">
+              <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.3 19.71 2.89 18.3 9.17 12 2.89 5.71 4.3 4.29l6.29 6.3 6.3-6.3z"/></svg>
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <strong>Profile picture</strong>
+              <span>Upload your own logo or photo — shown in the sidebar and on your messages.</span>
+            </div>
+            <div class="settings-avatar-control">
+              <div class="settings-avatar-preview" id="settings-avatar-preview"></div>
+              <label for="avatar-file-input" class="btn btn-ghost btn-small">Change</label>
+              <button type="button" id="remove-avatar-btn" class="btn btn-ghost btn-small">Remove</button>
+              <input type="file" id="avatar-file-input" accept="image/*" hidden />
+            </div>
+          </div>
+
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <strong>Theme</strong>
+              <span>Switch between dark and light mode.</span>
+            </div>
+            <button type="button" id="theme-toggle-btn" class="btn btn-ghost btn-small">Toggle theme</button>
+          </div>
+
+          <div class="settings-row settings-note">
+            Your chats are saved on this device (browser storage), so you can keep chatting without signing in.
+          </div>
         </div>
       </div>
 
