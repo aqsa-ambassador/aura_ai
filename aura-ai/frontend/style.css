@@ -187,10 +187,13 @@ html, body {
 .user-button-container { display: flex; align-items: center; }
 
 .user-profile-bar {
-  display: flex; align-items: center; justify-content: space-between;
+  display: none;
+  align-items: center; justify-content: space-between;
   padding: 8px 6px; border-radius: 10px; margin-top: 4px;
 }
 .user-profile-bar:hover { background: var(--panel-2); }
+.app-shell.signed-in .auth-buttons-sidebar { display: none; }
+.app-shell.signed-in .user-profile-bar { display: flex; }
 .user-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .user-avatar-initials {
   width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
