@@ -1,5 +1,5 @@
 /**
- * Aura AI — Frontend logic
+ * Aura AI — Frontend logic with Markdown Tables & Headings parser
  */
 
 const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev";
@@ -17,6 +17,7 @@ const themeToggle = document.getElementById("theme-toggle");
 const yearEl = document.getElementById("year");
 
 let isSending = false;
+let isVoiceOutputEnabled = false;
 let activeConversationId = null;
 let conversations = [];
 
@@ -56,7 +57,7 @@ window.addEventListener("load", () => {
   loadConversationsFromStorage();
 });
 
-// Clean Markdown & Table Parser
+// Advanced Markdown Parser (Supports Headings, Tables, Lists, Bold)
 function renderMarkdown(raw) {
   const escaped = raw
     .replace(/&/g, "&amp;")
@@ -87,6 +88,7 @@ function renderMarkdown(raw) {
   lines.forEach((line) => {
     const trimmed = line.trim();
 
+    // Table detection
     if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
       if (!inTable) inTable = true;
       tableRows.push(trimmed);
@@ -95,6 +97,7 @@ function renderMarkdown(raw) {
       flushTable();
     }
 
+    // Headings
     if (trimmed.startsWith("### ")) {
       html += `<h3>${inlineMd(trimmed.replace("### ", ""))}</h3>`;
     } else if (trimmed.startsWith("## ")) {
