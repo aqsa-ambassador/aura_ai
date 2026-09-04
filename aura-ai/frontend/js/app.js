@@ -8,6 +8,7 @@ const CHAT_URL = `${API_BASE}`;
 const IMAGE_API = "https://image.pollinations.ai/prompt/";
 
 const chatWindow = document.getElementById("chat-window");
+const chatMessagesInner = document.getElementById("chat-messages-inner");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
@@ -88,13 +89,13 @@ function renderUserAvatar() {
 
   if (userButton) {
     userButton.innerHTML = avatarData
-      ? `<div class="user-avatar-initials"><img src="${avatarData}" alt="Your avatar"/></div>`
+      ? `<div class="user-avatar-initials"><img class="avatar-img" src="${avatarData}" alt="Your avatar"/></div>`
       : `<div class="user-avatar-initials">${initials}</div>`;
   }
 
   if (settingsAvatarPreview) {
     settingsAvatarPreview.innerHTML = avatarData
-      ? `<img src="${avatarData}" alt="Your avatar"/>`
+      ? `<img class="avatar-img" src="${avatarData}" alt="Your avatar"/>`
       : initials;
   }
 
@@ -102,7 +103,7 @@ function renderUserAvatar() {
   document.querySelectorAll(".avatar-user").forEach((el) => {
     if (avatarData) {
       el.classList.add("has-image");
-      el.innerHTML = `<img src="${avatarData}" alt="You"/>`;
+      el.innerHTML = `<img class="avatar-img" src="${avatarData}" alt="You"/>`;
     } else {
       el.classList.remove("has-image");
       el.textContent = initials;
@@ -299,7 +300,7 @@ function loadConversation(id) {
 
   activeConversationId = id;
   if (headerTitle) headerTitle.textContent = conv.title;
-  if (chatWindow) chatWindow.innerHTML = "";
+  if (chatMessagesInner) chatMessagesInner.innerHTML = "";
 
   (conv.messages || []).forEach((msg) => {
     renderMessageBubble(msg.role, msg.text);
@@ -326,7 +327,7 @@ function deleteConversation(id) {
 
 function startNewChat() {
   activeConversationId = null;
-  if (chatWindow) chatWindow.innerHTML = WELCOME_HTML;
+  if (chatMessagesInner) chatMessagesInner.innerHTML = WELCOME_HTML;
   if (headerTitle) headerTitle.textContent = "New chat";
   if (quickPromptsContainer) quickPromptsContainer.classList.remove("hidden");
   if (chatInput) {
@@ -428,7 +429,7 @@ function scrollToBottom() {
 
 // Renders a bubble WITHOUT touching storage (used when replaying saved history)
 function renderMessageBubble(role, text) {
-  if (!chatWindow) return;
+  if (!chatMessagesInner) return;
   const wrapper = document.createElement("div");
   wrapper.className = `message ${role === "user" ? "message-user" : "message-ai"}`;
 
@@ -437,7 +438,7 @@ function renderMessageBubble(role, text) {
     const avatarData = getStoredAvatar();
     if (avatarData) {
       avatar.className = "avatar avatar-user has-image";
-      avatar.innerHTML = `<img src="${avatarData}" alt="You"/>`;
+      avatar.innerHTML = `<img class="avatar-img" src="${avatarData}" alt="You"/>`;
     } else {
       avatar.className = "avatar avatar-user";
       avatar.textContent = getInitials(getCurrentUserName());
@@ -457,7 +458,7 @@ function renderMessageBubble(role, text) {
 
   wrapper.appendChild(avatar);
   wrapper.appendChild(bubble);
-  chatWindow.appendChild(wrapper);
+  chatMessagesInner.appendChild(wrapper);
 }
 
 // Renders a bubble AND saves it into the active conversation's history
@@ -474,12 +475,12 @@ function addMessage(role, text) {
 }
 
 function addTypingIndicator() {
-  if (!chatWindow) return;
+  if (!chatMessagesInner) return;
   const wrapper = document.createElement("div");
   wrapper.className = "message message-ai";
   wrapper.id = "typing-indicator";
   wrapper.innerHTML = `<div class="avatar avatar-ai">✨</div><div class="bubble">Thinking...</div>`;
-  chatWindow.appendChild(wrapper);
+  chatMessagesInner.appendChild(wrapper);
   scrollToBottom();
 }
 
