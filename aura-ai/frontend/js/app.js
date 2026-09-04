@@ -75,6 +75,23 @@ if (yearEl) yearEl.textContent = new Date().getFullYear();
   }
 })();
 
+// ------------------------- LocalStorage Persistence -------------------------
+function saveConversationsToStorage() {
+  localStorage.setItem("aura_conversations", JSON.stringify(conversations));
+}
+
+function loadConversationsFromStorage() {
+  const saved = localStorage.getItem("aura_conversations");
+  if (saved) {
+    try {
+      conversations = JSON.parse(saved);
+      renderConversationList();
+    } catch (e) {
+      console.error("Failed to parse saved chats from localStorage", e);
+    }
+  }
+}
+
 // ------------------------- Sidebar: mobile open/close + desktop collapse -------------------------
 function isMobile() { return window.innerWidth <= 800; }
 
@@ -134,6 +151,8 @@ if (sidebarResizeHandle) {
 
 // ------------------------- Clerk initialization -------------------------
 window.addEventListener("load", async () => {
+  loadConversationsFromStorage();
+
   try {
     if (window.Clerk) {
       await window.Clerk.load();
@@ -180,8 +199,6 @@ function updateAuthUI() {
     }
     if (authLockBanner) authLockBanner.classList.add("visible");
     setInputEnabled(false);
-    conversations = [];
-    activeConversationId = null;
     renderConversationList();
     if (headerTitle) headerTitle.textContent = "New chat";
   }
@@ -270,6 +287,7 @@ function speakText(text) {
 
 // ------------------------- Conversations -------------------------
 async function loadConversations() {
+  loadConversationsFromStorage();
   renderConversationList();
 }
 
@@ -319,10 +337,10 @@ if (searchInput) {
 
 async function startNewChat() {
   activeConversationId = Date.now().toString();
-  conversations.unshift({ id: activeConversationId, title: "New Chat" });
-  renderConversationList();
   chatWindow.innerHTML = "";
   addMessage("assistant", "New chat started. What would you like to talk about?");
+  if (headerTitle) headerTitle.textContent = "New chat";
+  renderConversationList();
   chatInput.focus();
   if (isMobile()) closeSidebar();
 }
@@ -330,12 +348,20 @@ if (newChatBtn) newChatBtn.addEventListener("click", startNewChat);
 
 function selectConversation(id) {
   activeConversationId = id;
+  const current = conversations.find((c) => c.id === id);
+  if (current && headerTitle) {
+    headerTitle.textContent = current.title;
+  }
   renderConversationList();
 }
 
 function deleteConversation(id) {
   conversations = conversations.filter((c) => c.id !== id);
+  saveConversationsToStorage();
   renderConversationList();
+  if (activeConversationId === id) {
+    startNewChat();
+  }
 }
 
 // ------------------------- Markdown -------------------------
@@ -501,8 +527,25 @@ function autoResizeInput() {
 async function sendMessage(text) {
   if ((!text.trim() && !attachedFileContent) || isSending) return;
 
+  if (!activeConversationId) {
+    activeConversationId = Date.now().toString();
+  }
+
+  const userTextPrompt = text.trim();
+
+  // If conversation does not exist, save title from first message
+  let activeConv = conversations.find((c) => c.id === activeConversationId);
+  if (!activeConv) {
+    const autoTitle = userTextPrompt.length > 28 ? userTextPrompt.substring(0, 28) + "..." : (userTextPrompt || "New Chat");
+    activeConv = { id: activeConversationId, title: autoTitle };
+    conversations.unshift(activeConv);
+    saveConversationsToStorage();
+    renderConversationList();
+    if (headerTitle) headerTitle.textContent = autoTitle;
+  }
+
   if (isImageMode) {
-    const prompt = text.trim();
+    const prompt = userTextPrompt;
     if (!prompt) return;
     addMessage("user", prompt);
     chatInput.value = "";
