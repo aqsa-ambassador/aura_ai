@@ -40,20 +40,24 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: "Inter", system-ui, -apple-system, sans-serif;
+  overflow: hidden;
 }
 
-/* ---------- Thin scrollbars on right edge ---------- */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
+/* ---------- Custom Scrollbar Styling (Only on Right Edge) ---------- */
+::-webkit-scrollbar { 
+  width: 6px; 
+  height: 6px; 
 }
-*::-webkit-scrollbar { width: 6px; height: 6px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-track { 
+  background: transparent; 
+}
+::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb);
   border-radius: 999px;
 }
-*::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+::-webkit-scrollbar-thumb:hover { 
+  background: var(--scroll-thumb-hover); 
+}
 
 .bg-glow {
   position: fixed; inset: 0; z-index: -1;
@@ -65,7 +69,7 @@ html, body {
 .app-shell {
   display: flex;
   height: 100vh;
-  width: 100%;
+  width: 100vw;
   overflow: hidden;
   position: relative;
 }
@@ -185,7 +189,69 @@ html, body {
 .conversation-item:hover .conversation-delete { opacity: 1; }
 .conversation-delete:hover { color: var(--error); }
 
-.sidebar-bottom { flex-shrink: 0; padding-top: 10px; border-top: 1px solid var(--border); margin-top: 8px; }
+/* ---------- Bottom Profile Section ---------- */
+.sidebar-bottom {
+  flex-shrink: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.user-profile-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-badge {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.settings-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.settings-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
 .auth-buttons-sidebar { display: flex; gap: 8px; }
 .btn {
   padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 13px;
@@ -194,7 +260,7 @@ html, body {
 .btn-block { flex: 1; }
 .btn-ghost:hover { background: var(--panel-2); }
 .btn-primary { background: var(--bubble-user); color: #fff; border: none; }
-.user-button-container { display: none; }
+.user-button-container { display: flex; }
 
 /* ---------- Mobile overlay behaviour ---------- */
 .sidebar-overlay {
@@ -203,14 +269,15 @@ html, body {
 }
 .sidebar-overlay.visible { display: block; }
 
-/* ---------- Main panel (Right-most Scrollbar Fix) ---------- */
+/* ---------- Main panel (Scrollbar FIXED to absolute right) ---------- */
 .main-panel {
   flex: 1; 
   display: flex; 
   flex-direction: column; 
   min-width: 0; 
   height: 100vh;
-  overflow-y: auto; /* Scrollbar yahan screen ke right edge par aayega */
+  overflow-y: auto !important; /* Forces scrollbar ONLY on the main panel right border */
+  overflow-x: hidden;
 }
 
 .app-header {
@@ -232,7 +299,7 @@ html, body {
 
 .chat-window {
   flex: 1; 
-  overflow: visible; /* Inner overflow disable kar diya */
+  overflow: visible !important; /* Disables inner scrollbar completely */
   padding: 20px 0; 
   display: flex; 
   flex-direction: column; 
