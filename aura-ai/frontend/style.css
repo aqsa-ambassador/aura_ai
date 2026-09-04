@@ -16,7 +16,7 @@
   --bubble-user: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   --bubble-ai: #171a24;
   --error: #ef4444;
-  --sidebar-width: 272px;
+  --sidebar-width: 280px; /* Thora sa width barha diya taake text wrap na ho */
   --radius: 14px;
   --scroll-thumb: rgba(124, 92, 255, 0.45);
   --scroll-thumb-hover: rgba(124, 92, 255, 0.75);
@@ -43,10 +43,10 @@ html, body {
   overflow: hidden;
 }
 
-/* ---------- Custom Scrollbar Styling (Only on Right Edge) ---------- */
+/* ---------- Custom Scrollbar Styling (Absolute Right Edge of Screen) ---------- */
 ::-webkit-scrollbar { 
-  width: 6px; 
-  height: 6px; 
+  width: 7px; 
+  height: 7px; 
 }
 ::-webkit-scrollbar-track { 
   background: transparent; 
@@ -78,7 +78,7 @@ html, body {
 .sidebar {
   position: relative;
   width: var(--sidebar-width);
-  min-width: 200px;
+  min-width: 220px;
   max-width: 420px;
   flex-shrink: 0;
   background: var(--panel);
@@ -189,7 +189,7 @@ html, body {
 .conversation-item:hover .conversation-delete { opacity: 1; }
 .conversation-delete:hover { color: var(--error); }
 
-/* ---------- Bottom Profile Section ---------- */
+/* ---------- Fixed Gemini-Style Bottom Profile Section ---------- */
 .sidebar-bottom {
   flex-shrink: 0;
   padding-top: 10px;
@@ -201,9 +201,10 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: 10px;
   background: var(--panel-2);
+  gap: 8px;
 }
 
 .user-info {
@@ -211,17 +212,19 @@ html, body {
   align-items: center;
   gap: 10px;
   overflow: hidden;
+  flex: 1;
 }
 
 .user-details {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
 }
 
 .user-name {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -231,6 +234,7 @@ html, body {
 .user-badge {
   font-size: 11px;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .settings-btn {
@@ -239,11 +243,12 @@ html, body {
   color: var(--text-secondary);
   font-size: 16px;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: background 0.2s;
 }
 
@@ -260,7 +265,7 @@ html, body {
 .btn-block { flex: 1; }
 .btn-ghost:hover { background: var(--panel-2); }
 .btn-primary { background: var(--bubble-user); color: #fff; border: none; }
-.user-button-container { display: flex; }
+.user-button-container { display: flex; align-items: center; }
 
 /* ---------- Mobile overlay behaviour ---------- */
 .sidebar-overlay {
@@ -269,20 +274,22 @@ html, body {
 }
 .sidebar-overlay.visible { display: block; }
 
-/* ---------- Main panel (Scrollbar FIXED to absolute right) ---------- */
+/* ---------- Main panel (Scrollbar FIXED to absolute right edge) ---------- */
 .main-panel {
   flex: 1; 
   display: flex; 
   flex-direction: column; 
   min-width: 0; 
   height: 100vh;
-  overflow-y: auto !important; /* Forces scrollbar ONLY on the main panel right border */
+  overflow-y: auto !important; 
   overflow-x: hidden;
 }
 
 .app-header {
   display: flex; align-items: center; gap: 10px;
-  padding: 12px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: 12px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  background: var(--bg);
+  position: sticky; top: 0; z-index: 10;
 }
 .header-title { flex: 1; font-weight: 600; font-size: 14px; color: var(--text-secondary); }
 .sidebar-open { display: none; }
@@ -294,12 +301,12 @@ html, body {
   width: 100%; 
   max-width: 860px; 
   margin: 0 auto; 
-  padding: 0 18px;
+  padding: 0 20px;
 }
 
 .chat-window {
   flex: 1; 
-  overflow: visible !important; /* Disables inner scrollbar completely */
+  overflow: visible !important; 
   padding: 20px 0; 
   display: flex; 
   flex-direction: column; 
@@ -374,10 +381,11 @@ html, body {
 }
 .file-chip button { background: none; border: none; color: var(--text-secondary); cursor: pointer; }
 
+/* Chat input bar secured at bottom */
 .chat-input-bar {
   display: flex; align-items: flex-end; gap: 6px;
   border: 1px solid var(--border); border-radius: 18px;
-  background: var(--panel); padding: 8px 10px; margin: 0 0 8px; flex-shrink: 0;
+  background: var(--panel); padding: 8px 10px; margin: 0 0 12px; flex-shrink: 0;
   width: 100%;
 }
 .chat-input-bar textarea {
@@ -409,6 +417,7 @@ html, body {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px; font-size: 12px; color: var(--text-secondary);
   border-top: 1px solid var(--border); flex-shrink: 0;
+  background: var(--bg);
 }
 .footer-dot { opacity: 0.5; }
 
