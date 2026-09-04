@@ -3,20 +3,20 @@
 * { box-sizing: border-box; }
 
 :root {
-  --bg: #0b0d14;
+  --bg: #131620;          /* Soft light-black background */
   --bg-glow-1: #7c5cff;
   --bg-glow-2: #4f9dff;
-  --panel: #12141d;
-  --panel-2: #171a24;
-  --border: #232636;
-  --text: #eceef4;
+  --panel: #181b26;       /* Comfortable dark gray sidebar */
+  --panel-2: #202433;     /* Highlights & secondary cards */
+  --border: #2c3046;      /* Softened border lines */
+  --text: #f1f3f9;        /* Crisp readable text */
   --text-secondary: #9aa0b4;
   --accent-1: #7c5cff;
   --accent-2: #4f9dff;
   --bubble-user: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-  --bubble-ai: #171a24;
+  --bubble-ai: #1d212e;   /* Clean charcoal/gray AI message bubbles */
   --error: #ef4444;
-  --sidebar-width: 280px; /* Thora sa width barha diya taake text wrap na ho */
+  --sidebar-width: 280px; 
   --radius: 14px;
   --scroll-thumb: rgba(124, 92, 255, 0.45);
   --scroll-thumb-hover: rgba(124, 92, 255, 0.75);
