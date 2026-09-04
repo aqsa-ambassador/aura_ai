@@ -1,5 +1,6 @@
 /**
  * Aura AI — Frontend logic with Markdown Tables & Headings parser
+ * + Persistent chat history (sidebar) + initials avatar
  */
 
 const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev";
@@ -15,13 +16,53 @@ const quickPromptsContainer = document.getElementById("quick-prompts");
 const headerTitle = document.getElementById("header-title");
 const themeToggle = document.getElementById("theme-toggle");
 const yearEl = document.getElementById("year");
+const newChatBtn = document.getElementById("new-chat-btn");
+const conversationList = document.getElementById("conversation-list");
+const searchChatsInput = document.getElementById("search-chats");
+const userButton = document.getElementById("user-button");
+const userNameDisplay = document.getElementById("user-name-display");
 
 let isSending = false;
 let isVoiceOutputEnabled = false;
 let activeConversationId = null;
 let conversations = [];
 
+const WELCOME_HTML = `
+  <div class="message message-ai">
+    <div class="avatar avatar-ai" aria-hidden="true">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="19" fill="var(--accent-1)" opacity="0.16"/>
+        <circle cx="20" cy="20" r="13.5" fill="var(--accent-2)" opacity="0.32"/>
+        <circle cx="20" cy="20" r="8" fill="var(--accent-1)"/>
+        <circle cx="16.5" cy="16.5" r="2.3" fill="#fff" opacity="0.55"/>
+      </svg>
+    </div>
+    <div class="bubble">
+      Welcome to <strong>Aura AI</strong>. Sign in, then start a new chat — every
+      conversation is saved to your account and synced across devices.
+    </div>
+  </div>
+`;
+
 if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+// ---------- Initials avatar (shows the logged-in user's own initials, like a profile logo) ----------
+function getInitials(name) {
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "U";
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function renderUserAvatar() {
+  const name = (userNameDisplay && userNameDisplay.textContent.trim()) || "User";
+  const initials = getInitials(name);
+  if (userButton) {
+    userButton.innerHTML = `<div class="user-avatar-initials">${initials}</div>`;
+  }
+}
+renderUserAvatar();
 
 // Theme toggle
 if (themeToggle) {
@@ -37,6 +78,7 @@ if (themeToggle) {
   });
 }
 
+// ---------- Persistence ----------
 function saveConversationsToStorage() {
   localStorage.setItem("aura_conversations", JSON.stringify(conversations));
 }
@@ -46,18 +88,127 @@ function loadConversationsFromStorage() {
   if (saved) {
     try {
       conversations = JSON.parse(saved);
-      renderConversationList();
     } catch (e) {
       console.error("Storage error", e);
+      conversations = [];
     }
   }
+  renderConversationList();
 }
 
 window.addEventListener("load", () => {
   loadConversationsFromStorage();
 });
 
-// Advanced Markdown Parser (Supports Headings, Tables, Lists, Bold)
+// ---------- Sidebar: conversation list rendering ----------
+function renderConversationList(filterText = "") {
+  if (!conversationList) return;
+  conversationList.innerHTML = "";
+
+  const filtered = filterText
+    ? conversations.filter((c) => c.title.toLowerCase().includes(filterText.toLowerCase()))
+    : conversations;
+
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "conversation-empty";
+    empty.id = "conversation-empty";
+    empty.textContent = conversations.length === 0 ? "No chats yet" : "No matching chats";
+    conversationList.appendChild(empty);
+    return;
+  }
+
+  filtered.forEach((conv) => {
+    const item = document.createElement("div");
+    item.className = "conversation-item" + (conv.id === activeConversationId ? " active" : "");
+    item.dataset.id = conv.id;
+
+    const title = document.createElement("span");
+    title.className = "conversation-title";
+    title.textContent = conv.title;
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "conversation-delete";
+    delBtn.setAttribute("aria-label", "Delete chat");
+    delBtn.innerHTML = "✕";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteConversation(conv.id);
+    });
+
+    item.appendChild(title);
+    item.appendChild(delBtn);
+    item.addEventListener("click", () => loadConversation(conv.id));
+    conversationList.appendChild(item);
+  });
+}
+
+function getActiveConversation() {
+  return conversations.find((c) => c.id === activeConversationId) || null;
+}
+
+function loadConversation(id) {
+  const conv = conversations.find((c) => c.id === id);
+  if (!conv) return;
+
+  activeConversationId = id;
+  if (headerTitle) headerTitle.textContent = conv.title;
+  if (chatWindow) chatWindow.innerHTML = "";
+
+  (conv.messages || []).forEach((msg) => {
+    renderMessageBubble(msg.role, msg.text);
+  });
+
+  if (quickPromptsContainer) {
+    quickPromptsContainer.classList.toggle("hidden", (conv.messages || []).length > 0);
+  }
+
+  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
+  scrollToBottom();
+  closeSidebarOnMobile();
+}
+
+function deleteConversation(id) {
+  conversations = conversations.filter((c) => c.id !== id);
+  saveConversationsToStorage();
+  if (activeConversationId === id) {
+    startNewChat();
+  } else {
+    renderConversationList(searchChatsInput ? searchChatsInput.value : "");
+  }
+}
+
+function startNewChat() {
+  activeConversationId = null;
+  if (chatWindow) chatWindow.innerHTML = WELCOME_HTML;
+  if (headerTitle) headerTitle.textContent = "New chat";
+  if (quickPromptsContainer) quickPromptsContainer.classList.remove("hidden");
+  if (chatInput) {
+    chatInput.value = "";
+    chatInput.focus();
+  }
+  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
+  closeSidebarOnMobile();
+}
+
+function closeSidebarOnMobile() {
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("sidebar-overlay");
+  if (window.innerWidth <= 800 && sidebar && sidebar.classList.contains("open")) {
+    sidebar.classList.remove("open");
+    if (overlay) overlay.classList.remove("visible");
+  }
+}
+
+if (newChatBtn) newChatBtn.addEventListener("click", startNewChat);
+
+if (searchChatsInput) {
+  searchChatsInput.addEventListener("input", () => {
+    renderConversationList(searchChatsInput.value);
+  });
+}
+
+// ---------- Markdown Parser (Supports Headings, Tables, Lists, Bold) ----------
 function renderMarkdown(raw) {
   const escaped = raw
     .replace(/&/g, "&amp;")
@@ -88,7 +239,6 @@ function renderMarkdown(raw) {
   lines.forEach((line) => {
     const trimmed = line.trim();
 
-    // Table detection
     if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
       if (!inTable) inTable = true;
       tableRows.push(trimmed);
@@ -97,7 +247,6 @@ function renderMarkdown(raw) {
       flushTable();
     }
 
-    // Headings
     if (trimmed.startsWith("### ")) {
       html += `<h3>${inlineMd(trimmed.replace("### ", ""))}</h3>`;
     } else if (trimmed.startsWith("## ")) {
@@ -131,14 +280,15 @@ function scrollToBottom() {
   });
 }
 
-function addMessage(role, text) {
+// Renders a bubble WITHOUT touching storage (used when replaying saved history)
+function renderMessageBubble(role, text) {
   if (!chatWindow) return;
   const wrapper = document.createElement("div");
   wrapper.className = `message ${role === "user" ? "message-user" : "message-ai"}`;
 
   const avatar = document.createElement("div");
   avatar.className = `avatar ${role === "user" ? "avatar-user" : "avatar-ai"}`;
-  avatar.innerHTML = role === "user" ? "👤" : "✨";
+  avatar.innerHTML = role === "user" ? getInitials(userNameDisplay ? userNameDisplay.textContent : "User") : "✨";
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
@@ -151,7 +301,19 @@ function addMessage(role, text) {
   wrapper.appendChild(avatar);
   wrapper.appendChild(bubble);
   chatWindow.appendChild(wrapper);
+}
+
+// Renders a bubble AND saves it into the active conversation's history
+function addMessage(role, text) {
+  renderMessageBubble(role, text);
   scrollToBottom();
+
+  const conv = getActiveConversation();
+  if (conv) {
+    conv.messages = conv.messages || [];
+    conv.messages.push({ role, text });
+    saveConversationsToStorage();
+  }
 }
 
 function addTypingIndicator() {
@@ -174,22 +336,20 @@ async function sendMessage(text) {
 
   if (!activeConversationId) {
     activeConversationId = Date.now().toString();
-  }
-
-  const userText = text.trim();
-  let activeConv = conversations.find((c) => c.id === activeConversationId);
-  if (!activeConv) {
+    const userText = text.trim();
     const autoTitle = userText.length > 25 ? userText.substring(0, 25) + "..." : userText;
-    activeConv = { id: activeConversationId, title: autoTitle };
-    conversations.unshift(activeConv);
+    conversations.unshift({ id: activeConversationId, title: autoTitle, messages: [] });
     saveConversationsToStorage();
     if (headerTitle) headerTitle.textContent = autoTitle;
   }
 
+  const userText = text.trim();
   isSending = true;
   if (sendBtn) sendBtn.disabled = true;
+  if (quickPromptsContainer) quickPromptsContainer.classList.add("hidden");
 
   addMessage("user", userText);
+  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
   chatInput.value = "";
   addTypingIndicator();
 
