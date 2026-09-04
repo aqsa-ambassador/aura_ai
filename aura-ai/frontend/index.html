@@ -72,6 +72,10 @@
             </div>
           </div>
 
+          <button class="logout-btn" id="logout-btn" title="Log out" aria-label="Log out">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.1 0-2 .9-2 2v4h2V5h9v14h-9v-4H9v4c0 1.1.9 2 2 2h9c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+          </button>
+
           <button class="settings-btn" id="open-settings-btn" title="Settings" aria-label="Settings">
             ⚙️
           </button>
@@ -109,6 +113,14 @@
             <button type="button" id="theme-toggle-btn" class="btn btn-ghost btn-small">Toggle theme</button>
           </div>
 
+          <div class="settings-row settings-row-logout" id="settings-logout-row">
+            <div class="settings-row-label">
+              <strong>Account</strong>
+              <span>Sign out of your Aura AI account on this device.</span>
+            </div>
+            <button type="button" id="settings-logout-btn" class="btn btn-ghost btn-small">Log out</button>
+          </div>
+
           <div class="settings-row settings-note">
             Your chats are saved on this device (browser storage), so you can keep chatting without signing in.
           </div>
@@ -137,14 +149,6 @@
         <div id="chat-window" class="chat-window">
           <div id="chat-messages-inner" class="chat-messages-inner">
             <div class="message message-ai">
-              <div class="avatar avatar-ai" aria-hidden="true">
-                <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="20" cy="20" r="19" fill="var(--accent-1)" opacity="0.16"/>
-                  <circle cx="20" cy="20" r="13.5" fill="var(--accent-2)" opacity="0.32"/>
-                  <circle cx="20" cy="20" r="8" fill="var(--accent-1)"/>
-                  <circle cx="16.5" cy="16.5" r="2.3" fill="#fff" opacity="0.55"/>
-                </svg>
-              </div>
               <div class="bubble">
                 Welcome to <strong>Aura AI</strong>. Sign in, then start a new chat — every
                 conversation is saved to your account and synced across devices.
