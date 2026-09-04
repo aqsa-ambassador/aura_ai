@@ -2,7 +2,7 @@
  * Aura AI — Frontend logic
  */
 
-const API_BASE = "https://aura-ai-worker.aqsasarfraz732.workers.dev"; // <-- your Worker URL
+const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev"; // <-- your Worker URL
 const CHAT_URL = `${API_BASE}/api/chat`;
 const CONVERSATIONS_URL = `${API_BASE}/api/conversations`;
 const MESSAGES_URL = `${API_BASE}/api/messages`;
