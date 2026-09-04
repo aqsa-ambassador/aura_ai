@@ -199,6 +199,10 @@ function initClerkAuth() {
           window.Clerk.addListener((state) => {
             updateAuthUI((state && state.user) || null);
           });
+          // Fallback: periodically re-check in case the listener misses an update
+          setInterval(() => {
+            updateAuthUI(window.Clerk.user || null);
+          }, 2000);
         })
         .catch((err) => console.error("Clerk failed to load", err));
     } else if (attemptsLeft > 0) {
