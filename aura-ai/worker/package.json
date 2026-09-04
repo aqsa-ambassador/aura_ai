@@ -1,0 +1,17 @@
+{
+  "name": "aura-ai-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 execute aura-ai-db --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute aura-ai-db --remote --file=./schema.sql"
+  },
+  "dependencies": {
+    "@clerk/backend": "^1.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  }
+}
