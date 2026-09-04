@@ -189,7 +189,7 @@ html, body {
 .conversation-item:hover .conversation-delete { opacity: 1; }
 .conversation-delete:hover { color: var(--error); }
 
-/* ---------- Fixed Gemini-Style Bottom Profile Section ---------- */
+/* ---------- Fixed Gemini-Style Bottom Profile Section (Clean Settings Icon) ---------- */
 .sidebar-bottom {
   flex-shrink: 0;
   padding-top: 10px;
@@ -237,23 +237,26 @@ html, body {
   white-space: nowrap;
 }
 
+/* Sleek Minimalist Settings Button Styling */
 .settings-btn {
-  background: transparent;
-  border: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
 }
 
 .settings-btn:hover {
-  background: var(--border);
+  background: var(--bg);
+  border-color: var(--accent-1);
   color: var(--text);
 }
 
@@ -274,22 +277,22 @@ html, body {
 }
 .sidebar-overlay.visible { display: block; }
 
-/* ---------- Main panel (Scrollbar FIXED to absolute right edge) ---------- */
+/* ---------- Main panel & Chat Layout (Fixed Input Bar & Scroll) ---------- */
 .main-panel {
   flex: 1; 
   display: flex; 
   flex-direction: column; 
   min-width: 0; 
   height: 100vh;
-  overflow-y: auto !important; 
-  overflow-x: hidden;
+  overflow: hidden; /* Prevent body scroll, handle scroll internally */
+  position: relative;
 }
 
 .app-header {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
   background: var(--bg);
-  position: sticky; top: 0; z-index: 10;
+  z-index: 10;
 }
 .header-title { flex: 1; font-weight: 600; font-size: 14px; color: var(--text-secondary); }
 .sidebar-open { display: none; }
@@ -302,16 +305,19 @@ html, body {
   max-width: 860px; 
   margin: 0 auto; 
   padding: 0 20px;
+  min-height: 0;
+  position: relative;
 }
 
 .chat-window {
   flex: 1; 
-  overflow: visible !important; 
+  overflow-y: auto !important; /* Scrollable chat area inside boundaries */
   padding: 20px 0; 
   display: flex; 
   flex-direction: column; 
   gap: 18px;
   width: 100%;
+  min-height: 0;
 }
 
 .message { 
@@ -381,7 +387,7 @@ html, body {
 }
 .file-chip button { background: none; border: none; color: var(--text-secondary); cursor: pointer; }
 
-/* Chat input bar secured at bottom */
+/* Pinned chat input bar at bottom */
 .chat-input-bar {
   display: flex; align-items: flex-end; gap: 6px;
   border: 1px solid var(--border); border-radius: 18px;
