@@ -14,13 +14,13 @@
   --accent-1: #7c5cff;
   --accent-2: #4f9dff;
   --bubble-user: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-  --bubble-user-msg: #000000;
+  --bubble-user-msg: #35384a;
   --bubble-ai: #1d212e;
   --error: #ef4444;
   --sidebar-width: 280px;
   --radius: 14px;
-  --scroll-thumb: rgba(255, 255, 255, 0.18);
-  --scroll-thumb-hover: rgba(255, 255, 255, 0.32);
+  --scroll-thumb: #4b4f5e;
+  --scroll-thumb-hover: #6b7086;
 }
 
 html, body {
@@ -262,7 +262,7 @@ html, body {
   font-size: 14.5px; line-height: 1.55;
   white-space: pre-wrap; word-wrap: break-word;
 }
-.message-ai .bubble { background: var(--bubble-ai); border: 1px solid var(--border); border-top-left-radius: 4px; }
+.message-ai .bubble { background: transparent; border: none; padding: 4px 0; max-width: 100%; }
 .message-user .bubble { background: var(--bubble-user-msg); color: #fff; border-top-right-radius: 4px; white-space: normal; }
 .error-break { border-color: var(--error) !important; color: var(--error); }
 
