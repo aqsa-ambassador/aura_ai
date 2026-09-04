@@ -1,401 +1,398 @@
-/**
- * Aura AI — Frontend logic with Markdown Tables & Headings parser
- * + Persistent chat history (sidebar) + initials avatar
- */
+/* ============ Aura AI — Stylesheet ============ */
 
-const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev";
-const CHAT_URL = `${API_BASE}`;
-const IMAGE_API = "https://image.pollinations.ai/prompt/";
+* { box-sizing: border-box; }
 
-const chatWindow = document.getElementById("chat-window");
-const chatForm = document.getElementById("chat-form");
-const chatInput = document.getElementById("chat-input");
-const sendBtn = document.getElementById("send-btn");
-const quickButtons = document.querySelectorAll(".quick-btn");
-const quickPromptsContainer = document.getElementById("quick-prompts");
-const headerTitle = document.getElementById("header-title");
-const themeToggle = document.getElementById("theme-toggle");
-const yearEl = document.getElementById("year");
-const newChatBtn = document.getElementById("new-chat-btn");
-const conversationList = document.getElementById("conversation-list");
-const searchChatsInput = document.getElementById("search-chats");
-const userButton = document.getElementById("user-button");
-const userNameDisplay = document.getElementById("user-name-display");
-
-let isSending = false;
-let isVoiceOutputEnabled = false;
-let activeConversationId = null;
-let conversations = [];
-
-const WELCOME_HTML = `
-  <div class="message message-ai">
-    <div class="avatar avatar-ai" aria-hidden="true">
-      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="20" cy="20" r="19" fill="var(--accent-1)" opacity="0.16"/>
-        <circle cx="20" cy="20" r="13.5" fill="var(--accent-2)" opacity="0.32"/>
-        <circle cx="20" cy="20" r="8" fill="var(--accent-1)"/>
-        <circle cx="16.5" cy="16.5" r="2.3" fill="#fff" opacity="0.55"/>
-      </svg>
-    </div>
-    <div class="bubble">
-      Welcome to <strong>Aura AI</strong>. Sign in, then start a new chat — every
-      conversation is saved to your account and synced across devices.
-    </div>
-  </div>
-`;
-
-if (yearEl) yearEl.textContent = new Date().getFullYear();
-
-// ---------- Initials avatar (shows the logged-in user's own initials, like a profile logo) ----------
-function getInitials(name) {
-  if (!name) return "U";
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "U";
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+:root {
+  --bg: #131620;
+  --bg-glow-1: #7c5cff;
+  --bg-glow-2: #4f9dff;
+  --panel: #181b26;
+  --panel-2: #202433;
+  --border: #2c3046;
+  --text: #f1f3f9;
+  --text-secondary: #9aa0b4;
+  --accent-1: #7c5cff;
+  --accent-2: #4f9dff;
+  --bubble-user: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  --bubble-user-msg: #35384a;
+  --bubble-ai: #1d212e;
+  --error: #ef4444;
+  --sidebar-width: 280px;
+  --radius: 14px;
+  --scroll-thumb: #4b4f5e;
+  --scroll-thumb-hover: #6b7086;
 }
 
-function renderUserAvatar() {
-  const name = (userNameDisplay && userNameDisplay.textContent.trim()) || "User";
-  const initials = getInitials(name);
-  if (userButton) {
-    userButton.innerHTML = `<div class="user-avatar-initials">${initials}</div>`;
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* Thin, subtle scrollbars (Claude-style: minimal, barely-there until hovered) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+
+.bg-glow {
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(600px 400px at 15% 10%, color-mix(in srgb, var(--bg-glow-1) 18%, transparent), transparent 60%),
+    radial-gradient(600px 400px at 85% 90%, color-mix(in srgb, var(--bg-glow-2) 16%, transparent), transparent 60%);
+}
+
+.app-shell {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  position: relative;
+  width: var(--sidebar-width);
+  min-width: 200px;
+  max-width: 420px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 14px 12px;
+  transition: transform 0.25s ease, width 0.2s ease;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-shell.sidebar-collapsed .sidebar {
+  width: 0;
+  min-width: 0;
+  padding: 14px 0;
+  border-right: none;
+  overflow: hidden;
+}
+.app-shell.sidebar-collapsed .sidebar > * { opacity: 0; pointer-events: none; }
+
+.sidebar-open-float {
+  display: none;
+  position: absolute;
+  top: 14px; left: 14px;
+  z-index: 20;
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.app-shell.sidebar-collapsed .sidebar-open-float { display: block; }
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0; right: -3px;
+  width: 6px; height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle.dragging { background: color-mix(in srgb, var(--accent-1) 30%, transparent); }
+.app-shell.sidebar-collapsed .sidebar-resize-handle { display: none; }
+
+.sidebar-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; flex-shrink: 0;
+}
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand-logo svg { width: 26px; height: 26px; }
+.brand-name { font-weight: 700; font-size: 16px; }
+
+.icon-btn {
+  background: transparent; border: none; color: var(--text-secondary);
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.icon-btn:hover { background: var(--panel-2); color: var(--text); }
+
+.new-chat-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel-2); color: var(--text); font-weight: 600;
+  cursor: pointer; margin-bottom: 12px; flex-shrink: 0;
+}
+.new-chat-btn:hover { border-color: var(--accent-1); }
+
+.sidebar-search { margin-bottom: 10px; flex-shrink: 0; }
+.sidebar-search input {
+  width: 100%; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 13px; outline: none;
+}
+.sidebar-search input:focus { border-color: var(--accent-1); }
+
+.sidebar-section-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-secondary); margin: 4px 4px 6px; flex-shrink: 0;
+}
+
+.conversation-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.conversation-empty { color: var(--text-secondary); font-size: 13px; padding: 10px 4px; }
+
+.conversation-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  font-size: 13.5px; color: var(--text-secondary);
+  gap: 6px;
+}
+.conversation-item:hover { background: var(--panel-2); color: var(--text); }
+.conversation-item.active { background: color-mix(in srgb, var(--accent-1) 16%, transparent); color: var(--text); }
+.conversation-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+.conversation-delete {
+  background: none; border: none; color: var(--text-secondary);
+  opacity: 0; cursor: pointer; font-size: 11px; padding: 2px 4px;
+}
+.conversation-item:hover .conversation-delete { opacity: 1; }
+.conversation-delete:hover { color: var(--error); }
+
+.sidebar-bottom { flex-shrink: 0; padding-top: 10px; border-top: 1px solid var(--border); margin-top: 8px; }
+.auth-buttons-sidebar { display: flex; gap: 8px; }
+.btn {
+  padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 13px;
+  cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text);
+}
+.btn-block { flex: 1; }
+.btn-ghost:hover { background: var(--panel-2); }
+.btn-primary { background: var(--bubble-user); color: #fff; border: none; }
+.user-button-container { display: flex; align-items: center; }
+
+.user-profile-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 6px; border-radius: 10px; margin-top: 4px;
+}
+.user-profile-bar:hover { background: var(--panel-2); }
+.user-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.user-avatar-initials {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bubble-user);
+  color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em;
+  overflow: hidden;
+}
+.user-avatar-initials img, .avatar-img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.settings-btn {
+  background: transparent; border: none; color: var(--text-secondary);
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  font-size: 15px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.settings-btn:hover { background: var(--panel-2); color: var(--text); }
+.user-details { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.user-name {
+  font-size: 13.5px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.user-badge { font-size: 11px; color: var(--text-secondary); }
+
+/* ---------- Mobile overlay behaviour ---------- */
+.sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 15;
+}
+.sidebar-overlay.visible { display: block; }
+
+/* ---------- Main panel ---------- */
+.main-panel {
+  flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%;
+}
+
+.app-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.header-title { flex: 1; font-weight: 600; font-size: 14px; color: var(--text-secondary); }
+.sidebar-open { display: none; }
+
+.chat-container {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+  max-width: 860px; width: 100%; margin: 0 auto; padding: 0 18px;
+}
+
+.chat-window {
+  flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;
+  padding: 20px 14px 20px 4px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+
+.message { display: flex; gap: 12px; align-items: flex-start; }
+.message-user { flex-direction: row-reverse; }
+
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.avatar-ai svg { width: 100%; height: 100%; }
+.avatar-user {
+  background: var(--bubble-user);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.avatar-user.has-image { background: transparent; }
+.avatar-user svg { width: 16px; height: 16px; }
+
+.bubble {
+  max-width: 78%;
+  padding: 11px 15px;
+  border-radius: var(--radius);
+  font-size: 14.5px; line-height: 1.55;
+  white-space: pre-wrap; word-wrap: break-word;
+}
+.message-ai .bubble { background: transparent; border: none; padding: 4px 0; max-width: 100%; }
+.message-user .bubble { background: var(--bubble-user-msg); color: #fff; border-top-right-radius: 4px; white-space: normal; }
+.error-break { border-color: var(--error) !important; color: var(--error); }
+
+/* Markdown styling inside AI bubbles */
+.bubble h1, .bubble h2, .bubble h3 {
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 14px 0 8px;
+}
+.bubble h1:first-child, .bubble h2:first-child, .bubble h3:first-child { margin-top: 0; }
+.bubble h1 { font-size: 20px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.bubble h2 { font-size: 17px; }
+.bubble h3 { font-size: 15px; color: var(--accent-2); }
+.bubble ul, .bubble ol { margin: 6px 0; padding-left: 22px; }
+.bubble li { margin: 3px 0; }
+.bubble p { margin: 0 0 8px; }
+.bubble p:last-child { margin-bottom: 0; }
+.bubble code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+.bubble pre { background: var(--panel-2); padding: 10px; border-radius: 8px; overflow-x: auto; }
+.bubble table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13.5px; }
+.bubble th, .bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.bubble th { background: var(--panel-2); color: var(--text); }
+.bubble strong { font-weight: 700; }
+
+.quick-prompts { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 4px 10px; flex-shrink: 0; }
+.quick-prompts.hidden { display: none; }
+.quick-btn {
+  padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--panel-2); color: var(--text); font-size: 13px; cursor: pointer;
+}
+.quick-btn:hover { border-color: var(--accent-1); }
+
+.file-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 8px; background: var(--panel-2);
+  border: 1px solid var(--border); font-size: 13px; margin: 0 4px 8px; width: fit-content;
+}
+.file-chip button { background: none; border: none; color: var(--text-secondary); cursor: pointer; }
+
+.chat-input-bar {
+  display: flex; align-items: flex-end; gap: 6px;
+  border: 1px solid var(--border); border-radius: 18px;
+  background: var(--panel); padding: 8px 10px; margin: 0 4px 8px; flex-shrink: 0;
+}
+.chat-input-bar textarea {
+  flex: 1; resize: none; border: none; outline: none; background: transparent;
+  color: var(--text); font-family: inherit; font-size: 14.5px; max-height: 140px;
+  padding: 6px 4px;
+}
+.send-btn {
+  width: 34px; height: 34px; border-radius: 10px; border: none; cursor: pointer;
+  background: var(--bubble-user); color: #fff; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.auth-lock-banner {
+  display: none; align-items: center; gap: 6px; justify-content: center;
+  padding: 10px; margin: 0 4px 8px; border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-1) 12%, transparent);
+  border: 1px solid var(--border); font-size: 13px; flex-shrink: 0;
+}
+.auth-lock-banner.visible { display: flex; }
+.link-btn { background: none; border: none; color: var(--accent-2); font-weight: 600; cursor: pointer; padding: 0; }
+
+.disclaimer { text-align: center; font-size: 11.5px; color: var(--text-secondary); margin: 0 0 8px; flex-shrink: 0; }
+
+.app-footer {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px; font-size: 12px; color: var(--text-secondary);
+  border-top: 1px solid var(--border); flex-shrink: 0;
+}
+.footer-dot { opacity: 0.5; }
+
+/* ---------- Settings modal ---------- */
+.settings-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,0.55);
+  align-items: center; justify-content: center;
+}
+.settings-overlay.visible { display: flex; }
+
+.settings-panel {
+  width: min(420px, 92vw);
+  max-height: 80vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 16px; padding: 18px;
+}
+.settings-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 700; font-size: 15px; margin-bottom: 14px;
+}
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 14px 0; border-top: 1px solid var(--border);
+}
+.settings-row:first-of-type { border-top: none; padding-top: 0; }
+.settings-row-label { display: flex; flex-direction: column; gap: 2px; }
+.settings-row-label strong { font-size: 13.5px; }
+.settings-row-label span { font-size: 12px; color: var(--text-secondary); }
+.settings-avatar-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.settings-avatar-preview {
+  width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bubble-user); color: #fff; font-weight: 700; font-size: 15px;
+}
+.btn-small { padding: 6px 10px; font-size: 12px; }
+.settings-note { color: var(--text-secondary); font-size: 12px; border-top: 1px solid var(--border); }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 800px) {
+  .sidebar {
+    position: fixed; top: 0; left: 0; z-index: 20; height: 100%;
+    transform: translateX(-100%);
+    width: min(var(--sidebar-width), 82vw);
   }
+  .sidebar.open { transform: translateX(0); }
+  .app-shell.sidebar-collapsed .sidebar { width: min(var(--sidebar-width), 82vw); }
+  .sidebar-open { display: flex; }
+  .sidebar-open-float { display: none !important; }
+  .sidebar-resize-handle { display: none; }
+  .bubble { max-width: 88%; }
 }
-renderUserAvatar();
-
-// Theme toggle
-if (themeToggle) {
-  themeToggle.addEventListener("click", () => {
-    const isLight = document.documentElement.getAttribute("data-theme") === "light";
-    if (isLight) {
-      document.documentElement.removeAttribute("data-theme");
-      localStorage.setItem("aura-theme", "dark");
-    } else {
-      document.documentElement.setAttribute("data-theme", "light");
-      localStorage.setItem("aura-theme", "light");
-    }
-  });
-}
-
-// ---------- Persistence ----------
-function saveConversationsToStorage() {
-  localStorage.setItem("aura_conversations", JSON.stringify(conversations));
-}
-
-function loadConversationsFromStorage() {
-  const saved = localStorage.getItem("aura_conversations");
-  if (saved) {
-    try {
-      conversations = JSON.parse(saved);
-    } catch (e) {
-      console.error("Storage error", e);
-      conversations = [];
-    }
-  }
-  renderConversationList();
-}
-
-window.addEventListener("load", () => {
-  loadConversationsFromStorage();
-});
-
-// ---------- Sidebar: conversation list rendering ----------
-function renderConversationList(filterText = "") {
-  if (!conversationList) return;
-  conversationList.innerHTML = "";
-
-  const filtered = filterText
-    ? conversations.filter((c) => c.title.toLowerCase().includes(filterText.toLowerCase()))
-    : conversations;
-
-  if (filtered.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "conversation-empty";
-    empty.id = "conversation-empty";
-    empty.textContent = conversations.length === 0 ? "No chats yet" : "No matching chats";
-    conversationList.appendChild(empty);
-    return;
-  }
-
-  filtered.forEach((conv) => {
-    const item = document.createElement("div");
-    item.className = "conversation-item" + (conv.id === activeConversationId ? " active" : "");
-    item.dataset.id = conv.id;
-
-    const title = document.createElement("span");
-    title.className = "conversation-title";
-    title.textContent = conv.title;
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "conversation-delete";
-    delBtn.setAttribute("aria-label", "Delete chat");
-    delBtn.innerHTML = "✕";
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteConversation(conv.id);
-    });
-
-    item.appendChild(title);
-    item.appendChild(delBtn);
-    item.addEventListener("click", () => loadConversation(conv.id));
-    conversationList.appendChild(item);
-  });
-}
-
-function getActiveConversation() {
-  return conversations.find((c) => c.id === activeConversationId) || null;
-}
-
-function loadConversation(id) {
-  const conv = conversations.find((c) => c.id === id);
-  if (!conv) return;
-
-  activeConversationId = id;
-  if (headerTitle) headerTitle.textContent = conv.title;
-  if (chatWindow) chatWindow.innerHTML = "";
-
-  (conv.messages || []).forEach((msg) => {
-    renderMessageBubble(msg.role, msg.text);
-  });
-
-  if (quickPromptsContainer) {
-    quickPromptsContainer.classList.toggle("hidden", (conv.messages || []).length > 0);
-  }
-
-  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
-  scrollToBottom();
-  closeSidebarOnMobile();
-}
-
-function deleteConversation(id) {
-  conversations = conversations.filter((c) => c.id !== id);
-  saveConversationsToStorage();
-  if (activeConversationId === id) {
-    startNewChat();
-  } else {
-    renderConversationList(searchChatsInput ? searchChatsInput.value : "");
-  }
-}
-
-function startNewChat() {
-  activeConversationId = null;
-  if (chatWindow) chatWindow.innerHTML = WELCOME_HTML;
-  if (headerTitle) headerTitle.textContent = "New chat";
-  if (quickPromptsContainer) quickPromptsContainer.classList.remove("hidden");
-  if (chatInput) {
-    chatInput.value = "";
-    chatInput.focus();
-  }
-  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
-  closeSidebarOnMobile();
-}
-
-function closeSidebarOnMobile() {
-  const sidebar = document.getElementById("sidebar");
-  const overlay = document.getElementById("sidebar-overlay");
-  if (window.innerWidth <= 800 && sidebar && sidebar.classList.contains("open")) {
-    sidebar.classList.remove("open");
-    if (overlay) overlay.classList.remove("visible");
-  }
-}
-
-if (newChatBtn) newChatBtn.addEventListener("click", startNewChat);
-
-if (searchChatsInput) {
-  searchChatsInput.addEventListener("input", () => {
-    renderConversationList(searchChatsInput.value);
-  });
-}
-
-// ---------- Markdown Parser (Supports Headings, Tables, Lists, Bold) ----------
-function renderMarkdown(raw) {
-  const escaped = raw
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-  const lines = escaped.split("\n");
-  let html = "";
-  let inTable = false;
-  let tableRows = [];
-
-  const flushTable = () => {
-    if (!inTable || tableRows.length === 0) return;
-    html += "<table>";
-    tableRows.forEach((row, idx) => {
-      const cells = row.split("|").map(c => c.trim()).filter(c => c !== "");
-      if (idx === 0) {
-        html += "<tr>" + cells.map(c => `<th>${inlineMd(c)}</th>`).join("") + "</tr>";
-      } else if (!row.includes("---")) {
-        html += "<tr>" + cells.map(c => `<td>${inlineMd(c)}</td>`).join("") + "</tr>";
-      }
-    });
-    html += "</table>";
-    tableRows = [];
-    inTable = false;
-  };
-
-  lines.forEach((line) => {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
-      if (!inTable) inTable = true;
-      tableRows.push(trimmed);
-      return;
-    } else {
-      flushTable();
-    }
-
-    if (trimmed.startsWith("### ")) {
-      html += `<h3>${inlineMd(trimmed.replace("### ", ""))}</h3>`;
-    } else if (trimmed.startsWith("## ")) {
-      html += `<h2>${inlineMd(trimmed.replace("## ", ""))}</h2>`;
-    } else if (trimmed.startsWith("# ")) {
-      html += `<h1>${inlineMd(trimmed.replace("# ", ""))}</h1>`;
-    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      html += `<li>${inlineMd(trimmed.substring(2))}</li>`;
-    } else if (trimmed === "") {
-      html += "<br/>";
-    } else {
-      html += `<p>${inlineMd(trimmed)}</p>`;
-    }
-  });
-
-  flushTable();
-  return html;
-}
-
-function inlineMd(text) {
-  return text
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
-}
-
-function scrollToBottom() {
-  if (!chatWindow) return;
-  requestAnimationFrame(() => {
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-  });
-}
-
-// Renders a bubble WITHOUT touching storage (used when replaying saved history)
-function renderMessageBubble(role, text) {
-  if (!chatWindow) return;
-  const wrapper = document.createElement("div");
-  wrapper.className = `message ${role === "user" ? "message-user" : "message-ai"}`;
-
-  const avatar = document.createElement("div");
-  avatar.className = `avatar ${role === "user" ? "avatar-user" : "avatar-ai"}`;
-  avatar.innerHTML = role === "user" ? getInitials(userNameDisplay ? userNameDisplay.textContent : "User") : "✨";
-
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  if (role === "user") {
-    bubble.textContent = text;
-  } else {
-    bubble.innerHTML = renderMarkdown(text);
-  }
-
-  wrapper.appendChild(avatar);
-  wrapper.appendChild(bubble);
-  chatWindow.appendChild(wrapper);
-}
-
-// Renders a bubble AND saves it into the active conversation's history
-function addMessage(role, text) {
-  renderMessageBubble(role, text);
-  scrollToBottom();
-
-  const conv = getActiveConversation();
-  if (conv) {
-    conv.messages = conv.messages || [];
-    conv.messages.push({ role, text });
-    saveConversationsToStorage();
-  }
-}
-
-function addTypingIndicator() {
-  if (!chatWindow) return;
-  const wrapper = document.createElement("div");
-  wrapper.className = "message message-ai";
-  wrapper.id = "typing-indicator";
-  wrapper.innerHTML = `<div class="avatar avatar-ai">✨</div><div class="bubble">Thinking...</div>`;
-  chatWindow.appendChild(wrapper);
-  scrollToBottom();
-}
-
-function removeTypingIndicator() {
-  const el = document.getElementById("typing-indicator");
-  if (el) el.remove();
-}
-
-async function sendMessage(text) {
-  if (!text.trim() || isSending) return;
-
-  if (!activeConversationId) {
-    activeConversationId = Date.now().toString();
-    const userText = text.trim();
-    const autoTitle = userText.length > 25 ? userText.substring(0, 25) + "..." : userText;
-    conversations.unshift({ id: activeConversationId, title: autoTitle, messages: [] });
-    saveConversationsToStorage();
-    if (headerTitle) headerTitle.textContent = autoTitle;
-  }
-
-  const userText = text.trim();
-  isSending = true;
-  if (sendBtn) sendBtn.disabled = true;
-  if (quickPromptsContainer) quickPromptsContainer.classList.add("hidden");
-
-  addMessage("user", userText);
-  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
-  chatInput.value = "";
-  addTypingIndicator();
-
-  try {
-    const response = await fetch(CHAT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: userText, model: "groq" }),
-    });
-
-    const data = await response.json().catch(() => null);
-    removeTypingIndicator();
-
-    if (!response.ok || !data || data.error) {
-      addMessage("assistant", data?.error || "Something went wrong.");
-      return;
-    }
-
-    addMessage("assistant", data.response);
-  } catch (err) {
-    removeTypingIndicator();
-    addMessage("assistant", "Couldn't reach Aura AI. Check your internet connection.");
-  } finally {
-    isSending = false;
-    if (sendBtn) sendBtn.disabled = false;
-    if (chatInput) chatInput.focus();
-  }
-}
-
-if (chatForm) {
-  chatForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    sendMessage(chatInput.value);
-  });
-}
-if (chatInput) {
-  chatInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(chatInput.value);
-    }
-  });
-}
-quickButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    chatInput.value = btn.dataset.prompt;
-    chatInput.focus();
-  });
-});
