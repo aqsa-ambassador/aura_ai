@@ -29,6 +29,11 @@ const themeToggleBtn = document.getElementById("theme-toggle-btn");
 const avatarFileInput = document.getElementById("avatar-file-input");
 const removeAvatarBtn = document.getElementById("remove-avatar-btn");
 const settingsAvatarPreview = document.getElementById("settings-avatar-preview");
+const appShell = document.getElementById("app-shell");
+const signInBtn = document.getElementById("sign-in-btn");
+const signUpBtn = document.getElementById("sign-up-btn");
+const lockSignInBtn = document.getElementById("lock-sign-in-btn");
+const lockSignUpBtn = document.getElementById("lock-sign-up-btn");
 
 let isSending = false;
 let isVoiceOutputEnabled = false;
@@ -165,6 +170,55 @@ if (removeAvatarBtn) {
   const saved = localStorage.getItem("aura-theme");
   if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
 })();
+
+// ---------- Clerk auth state (hides Sign In/Sign Up once actually signed in) ----------
+function updateAuthUI(user) {
+  if (!appShell) return;
+  if (user) {
+    appShell.classList.add("signed-in");
+    if (userNameDisplay) {
+      userNameDisplay.textContent =
+        user.fullName ||
+        user.username ||
+        (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) ||
+        "Account";
+    }
+  } else {
+    appShell.classList.remove("signed-in");
+  }
+  renderUserAvatar();
+}
+
+function initClerkAuth() {
+  function waitForClerk(attemptsLeft = 40) {
+    if (window.Clerk) {
+      window.Clerk
+        .load()
+        .then(() => {
+          updateAuthUI(window.Clerk.user || null);
+          window.Clerk.addListener((state) => {
+            updateAuthUI((state && state.user) || null);
+          });
+        })
+        .catch((err) => console.error("Clerk failed to load", err));
+    } else if (attemptsLeft > 0) {
+      setTimeout(() => waitForClerk(attemptsLeft - 1), 250);
+    }
+  }
+  waitForClerk();
+}
+initClerkAuth();
+
+function openClerkSignIn() {
+  if (window.Clerk) window.Clerk.openSignIn();
+}
+function openClerkSignUp() {
+  if (window.Clerk) window.Clerk.openSignUp();
+}
+if (signInBtn) signInBtn.addEventListener("click", openClerkSignIn);
+if (signUpBtn) signUpBtn.addEventListener("click", openClerkSignUp);
+if (lockSignInBtn) lockSignInBtn.addEventListener("click", openClerkSignIn);
+if (lockSignUpBtn) lockSignUpBtn.addEventListener("click", openClerkSignUp);
 
 // ---------- Persistence ----------
 function saveConversationsToStorage() {
