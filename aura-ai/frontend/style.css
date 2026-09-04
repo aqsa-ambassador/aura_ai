@@ -32,7 +32,7 @@ html, body {
   overflow: hidden;
 }
 
-/* Thin, subtle scrollbars (Claude-style: minimal, barely-there until hovered) */
+/* Thin, subtle scrollbars */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) transparent;
@@ -303,21 +303,49 @@ html, body {
 }
 .file-chip button { background: none; border: none; color: var(--text-secondary); cursor: pointer; }
 
+/* ---------- Chat Input Bar (Updated matching target UI) ---------- */
 .chat-input-bar {
-  display: flex; align-items: flex-end; gap: 6px;
+  display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--border); border-radius: 18px;
-  background: var(--panel); padding: 8px 10px; margin: 0 4px 8px; flex-shrink: 0;
+  background: var(--panel); padding: 10px 14px; margin: 0 4px 8px; flex-shrink: 0;
 }
+.input-actions-left {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.input-action-btn {
+  background: none; border: none; color: var(--text-secondary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  padding: 4px; border-radius: 6px; transition: color 0.15s;
+}
+.input-action-btn:hover { color: var(--text); }
+.input-action-btn svg { width: 18px; height: 18px; }
+
 .chat-input-bar textarea {
   flex: 1; resize: none; border: none; outline: none; background: transparent;
   color: var(--text); font-family: inherit; font-size: 14.5px; max-height: 140px;
-  padding: 6px 4px;
+  padding: 4px; line-height: 1.4;
 }
+.chat-input-bar textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+.input-actions-right {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.mic-btn {
+  background: none; border: none; color: var(--text-secondary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  padding: 4px;
+}
+.mic-btn:hover { color: var(--text); }
+.mic-btn svg { width: 18px; height: 18px; }
+
 .send-btn {
-  width: 34px; height: 34px; border-radius: 10px; border: none; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 10px; border: none; cursor: pointer;
   background: var(--bubble-user); color: #fff; display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+.send-btn svg { width: 15px; height: 15px; }
 
 .auth-lock-banner {
   display: none; align-items: center; gap: 6px; justify-content: center;
@@ -328,12 +356,12 @@ html, body {
 .auth-lock-banner.visible { display: flex; }
 .link-btn { background: none; border: none; color: var(--accent-2); font-weight: 600; cursor: pointer; padding: 0; }
 
-.disclaimer { text-align: center; font-size: 11.5px; color: var(--text-secondary); margin: 0 0 8px; flex-shrink: 0; }
+.disclaimer { text-align: center; font-size: 11.5px; color: var(--text-secondary); margin: 4px 0 2px; flex-shrink: 0; }
 
 .app-footer {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px; font-size: 12px; color: var(--text-secondary);
-  border-top: 1px solid var(--border); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 4px 10px 10px; font-size: 11.5px; color: var(--text-secondary);
+  flex-shrink: 0;
 }
 .footer-dot { opacity: 0.5; }
 
