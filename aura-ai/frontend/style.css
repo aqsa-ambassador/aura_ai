@@ -149,6 +149,7 @@ html, body {
   color: var(--text-secondary); margin: 4px 4px 6px; flex-shrink: 0;
 }
 
+/* Account-related scrollbar (conversation list) — left untouched as requested */
 .conversation-list {
   flex: 1;
   overflow-y: auto;
@@ -186,15 +187,16 @@ html, body {
 .user-button-container { display: flex; align-items: center; }
 
 .user-profile-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
   padding: 8px 6px; border-radius: 10px; margin-top: 4px;
 }
 .user-profile-bar:hover { background: var(--panel-2); }
-.user-info { display: none; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .auth-buttons-sidebar { display: flex; gap: 8px; flex: 1; }
 .app-shell.signed-in .auth-buttons-sidebar { display: none; }
+
+.user-info { display: none; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .app-shell.signed-in .user-info { display: flex; }
-.user-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
 .user-avatar-initials {
   width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -205,6 +207,17 @@ html, body {
 .user-avatar-initials img, .avatar-img {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
+
+/* Logout button — only visible once the user is actually signed in */
+.logout-btn {
+  display: none;
+  background: transparent; border: none; color: var(--text-secondary);
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+.app-shell.signed-in .logout-btn { display: flex; }
+.logout-btn:hover { background: var(--panel-2); color: var(--error); }
+
 .settings-btn {
   background: transparent; border: none; color: var(--text-secondary);
   width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
@@ -258,12 +271,15 @@ html, body {
 .message { display: flex; gap: 12px; align-items: flex-start; }
 .message-user { flex-direction: row-reverse; }
 
+/* AI messages no longer show a circular avatar icon in front of them —
+   just the reply bubble, full width, for a cleaner look */
+.message-ai { display: block; }
+
 .avatar {
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
 }
-.avatar-ai svg { width: 100%; height: 100%; }
 .avatar-user {
   background: var(--bubble-user);
   color: #fff;
@@ -390,6 +406,11 @@ html, body {
 }
 .btn-small { padding: 6px 10px; font-size: 12px; }
 .settings-note { color: var(--text-secondary); font-size: 12px; border-top: 1px solid var(--border); }
+
+/* Account/logout row inside settings — only shown once signed in */
+.settings-row-logout { display: none; }
+.app-shell.signed-in .settings-row-logout { display: flex; }
+#settings-logout-btn:hover { color: var(--error); border-color: var(--error); }
 
 /* ---------- Mobile ---------- */
 @media (max-width: 800px) {
