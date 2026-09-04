@@ -58,19 +58,20 @@
 
       <!-- Updated Gemini-Style Bottom Bar -->
       <div class="sidebar-bottom">
-        <div id="auth-buttons" class="auth-buttons-sidebar">
-          <button id="sign-in-btn" class="btn btn-ghost btn-block">Sign In</button>
-          <button id="sign-up-btn" class="btn btn-primary btn-block">Sign Up</button>
-        </div>
-        
         <div class="user-profile-bar">
-          <div class="user-info">
+          <div id="auth-buttons" class="auth-buttons-sidebar">
+            <button id="sign-in-btn" class="btn btn-ghost btn-block">Sign In</button>
+            <button id="sign-up-btn" class="btn btn-primary btn-block">Sign Up</button>
+          </div>
+
+          <div class="user-info" id="user-info-block">
             <div id="user-button" class="user-button-container"></div>
             <div class="user-details">
               <span class="user-name" id="user-name-display">Aqsa Sarfraz</span>
               <span class="user-badge">Free Plan</span>
             </div>
           </div>
+
           <button class="settings-btn" id="open-settings-btn" title="Settings" aria-label="Settings">
             ⚙️
           </button>
