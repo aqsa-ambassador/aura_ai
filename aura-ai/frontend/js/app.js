@@ -2,8 +2,8 @@
  * Aura AI — Frontend logic
  */
 
-const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev"; // <-- your Worker URL
-const CHAT_URL = `${API_BASE}/api/chat`;
+const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev"; // Updated Worker URL
+const CHAT_URL = `${API_BASE}`;
 const CONVERSATIONS_URL = `${API_BASE}/api/conversations`;
 const MESSAGES_URL = `${API_BASE}/api/messages`;
 const IMAGE_API = "https://image.pollinations.ai/prompt/"; // free, no key needed
@@ -157,7 +157,6 @@ async function getToken() {
   return window.Clerk?.session ? window.Clerk.session.getToken() : null;
 }
 
-// Login/Signup is mandatory — chat stays locked until the user is signed in.
 function updateAuthUI() {
   const user = window.Clerk?.user;
   const wasAuthenticated = isAuthenticated;
@@ -271,24 +270,7 @@ function speakText(text) {
 
 // ------------------------- Conversations -------------------------
 async function loadConversations() {
-  try {
-    const token = await getToken();
-    if (!token) return;
-    const res = await fetch(CONVERSATIONS_URL, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.conversations) return;
-
-    conversations = data.conversations;
-    renderConversationList();
-
-    if (conversations.length > 0) {
-      selectConversation(conversations[0].id);
-    } else {
-      await startNewChat();
-    }
-  } catch (err) {
-    console.error("Failed to load conversations:", err);
-  }
+  renderConversationList();
 }
 
 function renderConversationList(filter = "") {
@@ -336,85 +318,27 @@ if (searchInput) {
 }
 
 async function startNewChat() {
-  if (!isAuthenticated) {
-    window.Clerk?.openSignIn();
-    return;
-  }
-  try {
-    const token = await getToken();
-    const res = await fetch(CONVERSATIONS_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.id) return;
-
-    conversations.unshift({ id: data.id, title: data.title, updated_at: data.updated_at });
-    renderConversationList(searchInput ? searchInput.value : "");
-    selectConversationLocal(data.id);
-    chatWindow.innerHTML = "";
-    addMessage("assistant", "New chat started. What would you like to talk about?");
-    chatInput.focus();
-    if (isMobile()) closeSidebar();
-  } catch (err) {
-    console.error("Failed to create chat:", err);
-  }
+  activeConversationId = Date.now().toString();
+  conversations.unshift({ id: activeConversationId, title: "New Chat" });
+  renderConversationList();
+  chatWindow.innerHTML = "";
+  addMessage("assistant", "New chat started. What would you like to talk about?");
+  chatInput.focus();
+  if (isMobile()) closeSidebar();
 }
 if (newChatBtn) newChatBtn.addEventListener("click", startNewChat);
 
-function selectConversationLocal(id) {
+function selectConversation(id) {
   activeConversationId = id;
-  renderConversationList(searchInput ? searchInput.value : "");
-  const conv = conversations.find((c) => c.id === id);
-  if (headerTitle) headerTitle.textContent = conv ? conv.title : "New chat";
+  renderConversationList();
 }
 
-async function selectConversation(id) {
-  selectConversationLocal(id);
-  chatWindow.innerHTML = "";
-  if (isMobile()) closeSidebar();
-
-  try {
-    const token = await getToken();
-    const res = await fetch(`${MESSAGES_URL}?conversationId=${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.messages) return;
-
-    if (data.messages.length === 0) {
-      addMessage("assistant", "New chat started. What would you like to talk about?");
-      return;
-    }
-    data.messages.forEach((m) => addMessage(m.role, m.content));
-  } catch (err) {
-    console.error("Failed to load messages:", err);
-  }
+function deleteConversation(id) {
+  conversations = conversations.filter((c) => c.id !== id);
+  renderConversationList();
 }
 
-async function deleteConversation(id) {
-  try {
-    const token = await getToken();
-    await fetch(`${CONVERSATIONS_URL}?id=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    conversations = conversations.filter((c) => c.id !== id);
-    renderConversationList(searchInput ? searchInput.value : "");
-
-    if (activeConversationId === id) {
-      if (conversations.length > 0) {
-        selectConversation(conversations[0].id);
-      } else {
-        await startNewChat();
-      }
-    }
-  } catch (err) {
-    console.error("Failed to delete chat:", err);
-  }
-}
-
-// ------------------------- Markdown (bullets, bold, code) -------------------------
+// ------------------------- Markdown -------------------------
 function escapeHtml(str) {
   return str
     .replace(/&/g, "&amp;")
@@ -466,8 +390,6 @@ const AURA_MARK_SVG = `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/sv
   <circle cx="16.5" cy="16.5" r="2.3" fill="#fff" opacity="0.55"/>
 </svg>`;
 
-// Simple person-outline icon instead of a "You" text label — matches
-// the clean look of Claude/Gemini avatars.
 const USER_ICON_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <circle cx="12" cy="8" r="4" fill="#fff"/>
   <path fill="#fff" d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5v1H4v-1Z"/>
@@ -579,13 +501,6 @@ function autoResizeInput() {
 async function sendMessage(text) {
   if ((!text.trim() && !attachedFileContent) || isSending) return;
 
-  if (!isAuthenticated) {
-    if (authLockBanner) authLockBanner.classList.add("visible");
-    window.Clerk?.openSignIn();
-    return;
-  }
-
-  // Image generation mode — no worker call needed, pollinations.ai is free/keyless.
   if (isImageMode) {
     const prompt = text.trim();
     if (!prompt) return;
@@ -606,11 +521,6 @@ async function sendMessage(text) {
     if (fileChipRemove) fileChipRemove.click();
   }
 
-  if (!activeConversationId) {
-    await startNewChat();
-    if (!activeConversationId) return;
-  }
-
   isSending = true;
   if (sendBtn) sendBtn.disabled = true;
 
@@ -620,14 +530,12 @@ async function sendMessage(text) {
   addTypingIndicator();
 
   try {
-    const token = await getToken();
     const response = await fetch(CHAT_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify({ conversationId: activeConversationId, message: fullMessage }),
+      body: JSON.stringify({ prompt: fullMessage, model: "groq" }),
     });
 
     const data = await response.json().catch(() => null);
@@ -638,15 +546,9 @@ async function sendMessage(text) {
       return;
     }
 
-    addMessage("assistant", data.reply);
-    speakText(data.reply.replace(/[*_`#]/g, ""));
+    addMessage("assistant", data.response);
+    speakText(data.response.replace(/[*_`#]/g, ""));
 
-    if (data.title) {
-      const conv = conversations.find((c) => c.id === activeConversationId);
-      if (conv) conv.title = data.title;
-      if (headerTitle) headerTitle.textContent = data.title;
-      renderConversationList(searchInput ? searchInput.value : "");
-    }
   } catch (err) {
     removeTypingIndicator();
     renderError("Couldn't reach Aura AI. Please check your connection.");
