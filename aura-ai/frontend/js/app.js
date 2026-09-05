@@ -1,6 +1,10 @@
 /**
  * Aura AI — Frontend logic with Markdown Tables & Headings parser
- * + Persistent chat history, Image gen, Voice input/output, Multi-file upload, 3-way theme, Clerk auth
+ * + Persistent chat history (sidebar, pin/archive)
+ * + Image generation (aspect ratio, download, regenerate), voice input/output
+ * + Multi-file upload (photo/video/audio/document) with previews
+ * + 3-way theme system (Light / Dark / Auto)
+ * + Clerk auth actions (logout, account switcher, add account, security/2FA)
  */
 
 const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev";
@@ -22,6 +26,7 @@ const searchChatsInput = document.getElementById("search-chats");
 const userButton = document.getElementById("user-button");
 const userNameDisplay = document.getElementById("user-name-display");
 
+// Input bar extra controls
 const micBtn = document.getElementById("mic-btn");
 const imageGenBtn = document.getElementById("image-gen-btn");
 const voiceOutputToggle = document.getElementById("voice-output-toggle");
@@ -31,6 +36,7 @@ const fileChipsContainer = document.getElementById("file-chips");
 const imageGenBar = document.getElementById("image-gen-bar");
 const aspectRatioGroup = document.getElementById("aspect-ratio-group");
 
+// Auth action buttons
 const logoutBtn = document.getElementById("logout-btn");
 const settingsLogoutBtn = document.getElementById("settings-logout-btn");
 const addAccountBtn = document.getElementById("add-account-btn");
@@ -40,6 +46,7 @@ const accountSwitcherBtn = document.getElementById("account-switcher-btn");
 const accountSwitcherPopover = document.getElementById("account-switcher-popover");
 const accountSwitcherList = document.getElementById("account-switcher-list");
 
+// Share (per-chat + whole app) elements
 const shareChatBtn = document.getElementById("share-chat-btn");
 const sharePopover = document.getElementById("share-popover");
 const sharePopoverTitle = document.getElementById("share-popover-title");
@@ -51,12 +58,14 @@ const shareEmailBtn = document.getElementById("share-email-btn");
 const shareMoreBtn = document.getElementById("share-more-btn");
 const stopShareBtn = document.getElementById("stop-share-btn");
 
+// Shared-chat read-only viewer elements
 const sharedViewOverlay = document.getElementById("shared-view-overlay");
 const sharedViewTitle = document.getElementById("shared-view-title");
 const sharedViewMessages = document.getElementById("shared-view-messages");
 const closeSharedViewBtn = document.getElementById("close-shared-view-btn");
 const openInAuraBtn = document.getElementById("open-in-aura-btn");
 
+// Live assistant (screen share) elements
 const liveAssistantBtn = document.getElementById("live-assistant-btn");
 const liveAssistantPanel = document.getElementById("live-assistant-panel");
 const liveAssistantVideo = document.getElementById("live-assistant-video");
@@ -64,6 +73,7 @@ const closeLiveAssistantBtn = document.getElementById("close-live-assistant-btn"
 const stopLiveAssistantBtn = document.getElementById("stop-live-assistant-btn");
 const askAboutScreenBtn = document.getElementById("ask-about-screen-btn");
 
+// Settings modal elements
 const openSettingsBtn = document.getElementById("open-settings-btn");
 const closeSettingsBtn = document.getElementById("close-settings-btn");
 const settingsOverlay = document.getElementById("settings-overlay");
@@ -86,20 +96,22 @@ let isRecording = false;
 let recognition = null;
 let activeConversationId = null;
 let conversations = [];
-let pendingAttachments = [];
+let pendingAttachments = []; // [{id, file, kind, dataUrl?}]
 let currentShareConv = null;
 let liveStream = null;
 
 const WELCOME_HTML = `
   <div class="message message-ai">
     <div class="bubble">
-      Welcome to <strong>Aura AI</strong>. Sign in, then start a new chat — every conversation is saved to your account and synced across devices.
+      Welcome to <strong>Aura AI</strong>. Sign in, then start a new chat — every
+      conversation is saved to your account and synced across devices.
     </div>
   </div>
 `;
 
 if (yearEl) yearEl.textContent = new Date().getFullYear();
 
+// ---------- Avatar (custom-uploaded logo, or initials fallback) ----------
 const AVATAR_STORAGE_KEY = "aura_user_avatar";
 
 function getInitials(name) {
@@ -137,9 +149,20 @@ function renderUserAvatar() {
       ? `<img class="avatar-img" src="${avatarData}" alt="Your avatar"/>`
       : initials;
   }
+
+  document.querySelectorAll(".avatar-user").forEach((el) => {
+    if (avatarData) {
+      el.classList.add("has-image");
+      el.innerHTML = `<img class="avatar-img" src="${avatarData}" alt="You"/>`;
+    } else {
+      el.classList.remove("has-image");
+      el.textContent = initials;
+    }
+  });
 }
 renderUserAvatar();
 
+// ---------- Settings modal ----------
 function openSettings() {
   if (settingsOverlay) settingsOverlay.classList.add("visible");
   refreshAccountSwitcherList();
@@ -155,7 +178,8 @@ if (settingsOverlay) {
   });
 }
 
-const THEME_STORAGE_KEY = "aura-theme-pref";
+// ---------- Theme system: Light / Dark / Auto ----------
+const THEME_STORAGE_KEY = "aura-theme-pref"; // "light" | "dark" | "auto"
 const prefersDarkMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
 const themeIconLight = document.getElementById("theme-icon-light");
@@ -181,6 +205,7 @@ function applyTheme(pref) {
     document.documentElement.removeAttribute("data-theme");
   }
 
+  // Update header cycle button icon + title
   if (themeIconLight && themeIconDark && themeIconAuto && themeCycleBtn) {
     themeIconLight.style.display = pref === "light" ? "block" : "none";
     themeIconDark.style.display = pref === "dark" ? "block" : "none";
@@ -189,6 +214,7 @@ function applyTheme(pref) {
     themeCycleBtn.title = `Theme: ${label} (click to change)`;
   }
 
+  // Update settings segmented control
   if (themeSegmented) {
     themeSegmented.querySelectorAll(".theme-seg-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.themeValue === pref);
@@ -198,10 +224,12 @@ function applyTheme(pref) {
 
 function setThemePref(pref) {
   localStorage.setItem(THEME_STORAGE_KEY, pref);
+  // Clean up legacy key from earlier single-toggle theme
   localStorage.removeItem("aura-theme");
   applyTheme(pref);
 }
 
+// Cycle: light -> dark -> auto -> light ...
 if (themeCycleBtn) {
   themeCycleBtn.addEventListener("click", () => {
     const order = ["light", "dark", "auto"];
@@ -217,7 +245,15 @@ if (themeSegmented) {
   });
 }
 
+if (prefersDarkMedia) {
+  prefersDarkMedia.addEventListener("change", () => {
+    if (getThemePref() === "auto") applyTheme("auto");
+  });
+}
+
+// Apply saved theme immediately (before first paint-critical logic runs)
 (function initTheme() {
+  // Migrate old boolean-ish theme value if present
   const legacy = localStorage.getItem("aura-theme");
   if (legacy && !localStorage.getItem(THEME_STORAGE_KEY)) {
     localStorage.setItem(THEME_STORAGE_KEY, legacy === "light" ? "light" : "dark");
@@ -228,14 +264,16 @@ if (themeSegmented) {
 if (avatarFileInput) {
   avatarFileInput.addEventListener("change", () => {
     const file = avatarFileInput.files && avatarFileInput.files[0];
-    if (!file || !file.type.startsWith("image/")) return;
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+
     const reader = new FileReader();
     reader.onload = () => {
       try {
         localStorage.setItem(AVATAR_STORAGE_KEY, reader.result);
         renderUserAvatar();
       } catch (e) {
-        console.error("Avatar error", e);
+        console.error("Couldn't save avatar (file may be too large)", e);
       }
     };
     reader.readAsDataURL(file);
@@ -249,12 +287,17 @@ if (removeAvatarBtn) {
   });
 }
 
+// ---------- Clerk auth state (hides Sign In/Sign Up once actually signed in) ----------
 function updateAuthUI(user) {
   if (!appShell) return;
   if (user) {
     appShell.classList.add("signed-in");
     if (userNameDisplay) {
-      userNameDisplay.textContent = user.fullName || user.username || (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || "Account";
+      userNameDisplay.textContent =
+        user.fullName ||
+        user.username ||
+        (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) ||
+        "Account";
     }
   } else {
     appShell.classList.remove("signed-in");
@@ -266,12 +309,18 @@ function updateAuthUI(user) {
 function initClerkAuth() {
   function waitForClerk(attemptsLeft = 40) {
     if (window.Clerk) {
-      window.Clerk.load().then(() => {
-        updateAuthUI(window.Clerk.user || null);
-        window.Clerk.addListener((state) => {
-          updateAuthUI((state && state.user) || null);
-        });
-      }).catch((err) => console.error("Clerk error", err));
+      window.Clerk
+        .load()
+        .then(() => {
+          updateAuthUI(window.Clerk.user || null);
+          window.Clerk.addListener((state) => {
+            updateAuthUI((state && state.user) || null);
+          });
+          setInterval(() => {
+            updateAuthUI(window.Clerk.user || null);
+          }, 2000);
+        })
+        .catch((err) => console.error("Clerk failed to load", err));
     } else if (attemptsLeft > 0) {
       setTimeout(() => waitForClerk(attemptsLeft - 1), 250);
     }
@@ -280,16 +329,25 @@ function initClerkAuth() {
 }
 initClerkAuth();
 
-function openClerkSignIn() { if (window.Clerk) window.Clerk.openSignIn(); }
-function openClerkSignUp() { if (window.Clerk) window.Clerk.openSignUp(); }
+function openClerkSignIn() {
+  if (window.Clerk) window.Clerk.openSignIn();
+}
+function openClerkSignUp() {
+  if (window.Clerk) window.Clerk.openSignUp();
+}
 if (signInBtn) signInBtn.addEventListener("click", openClerkSignIn);
 if (signUpBtn) signUpBtn.addEventListener("click", openClerkSignUp);
 if (lockSignInBtn) lockSignInBtn.addEventListener("click", openClerkSignIn);
 if (lockSignUpBtn) lockSignUpBtn.addEventListener("click", openClerkSignUp);
 
+// ---------- Logout ----------
 function handleLogout() {
   if (!window.Clerk) return;
-  window.Clerk.signOut().then(() => updateAuthUI(null)).catch((err) => console.error(err));
+  window.Clerk.signOut()
+    .then(() => {
+      updateAuthUI(null);
+    })
+    .catch((err) => console.error("Sign out failed", err));
 }
 if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
 if (settingsLogoutBtn) {
@@ -299,6 +357,7 @@ if (settingsLogoutBtn) {
   });
 }
 
+// ---------- Add account (requires "multi-session" enabled in Clerk Dashboard) ----------
 function handleAddAccount() {
   if (!window.Clerk) return;
   window.Clerk.openSignIn({ afterSignInUrl: window.location.href });
@@ -311,6 +370,7 @@ if (switcherAddAccountBtn) {
   });
 }
 
+// ---------- Security / two-step verification (managed inside Clerk's own profile UI) ----------
 if (securitySettingsBtn) {
   securitySettingsBtn.addEventListener("click", () => {
     if (!window.Clerk) return;
@@ -318,6 +378,7 @@ if (securitySettingsBtn) {
   });
 }
 
+// ---------- Multi-account switcher (Clerk multi-session support) ----------
 function closeAccountSwitcher() {
   if (accountSwitcherPopover) accountSwitcherPopover.classList.remove("visible");
 }
@@ -333,7 +394,13 @@ if (accountSwitcherBtn) {
   });
 }
 document.addEventListener("click", (e) => {
-  if (accountSwitcherPopover && accountSwitcherPopover.classList.contains("visible") && !accountSwitcherPopover.contains(e.target) && e.target !== accountSwitcherBtn) {
+  if (
+    accountSwitcherPopover &&
+    accountSwitcherPopover.classList.contains("visible") &&
+    !accountSwitcherPopover.contains(e.target) &&
+    e.target !== accountSwitcherBtn &&
+    !accountSwitcherBtn?.contains(e.target)
+  ) {
     closeAccountSwitcher();
   }
 });
@@ -341,9 +408,11 @@ document.addEventListener("click", (e) => {
 function refreshAccountSwitcherList() {
   if (!accountSwitcherList) return;
   accountSwitcherList.innerHTML = "";
+
   const client = window.Clerk && window.Clerk.client;
   const sessions = (client && client.sessions) || [];
   const activeSessionId = window.Clerk && window.Clerk.session && window.Clerk.session.id;
+
   const validSessions = sessions.filter((s) => s.status === "active" && s.user);
 
   if (validSessions.length === 0) {
@@ -353,7 +422,8 @@ function refreshAccountSwitcherList() {
 
   validSessions.forEach((session) => {
     const user = session.user;
-    const name = user.fullName || user.username || (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || "Account";
+    const name =
+      user.fullName || user.username || (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || "Account";
     const isCurrent = session.id === activeSessionId;
 
     const item = document.createElement("button");
@@ -384,18 +454,22 @@ function refreshAccountSwitcherList() {
 
     item.addEventListener("click", () => {
       if (!isCurrent && window.Clerk) {
-        window.Clerk.setActive({ session: session.id }).then(() => {
-          closeAccountSwitcher();
-          updateAuthUI(window.Clerk.user || null);
-        });
+        window.Clerk.setActive({ session: session.id })
+          .then(() => {
+            closeAccountSwitcher();
+            updateAuthUI(window.Clerk.user || null);
+          })
+          .catch((err) => console.error("Couldn't switch account", err));
       } else {
         closeAccountSwitcher();
       }
     });
+
     accountSwitcherList.appendChild(item);
   });
 }
 
+// ---------- Persistence ----------
 function saveConversationsToStorage() {
   localStorage.setItem("aura_conversations", JSON.stringify(conversations));
 }
@@ -410,14 +484,18 @@ function loadConversationsFromStorage() {
         if (typeof c.archived !== "boolean") c.archived = false;
       });
     } catch (e) {
+      console.error("Storage error", e);
       conversations = [];
     }
   }
   renderConversationList();
 }
 
-window.addEventListener("load", () => { loadConversationsFromStorage(); });
+window.addEventListener("load", () => {
+  loadConversationsFromStorage();
+});
 
+// ---------- Sidebar: conversation list rendering (with pin + archive) ----------
 function makeSectionLabel(text, collapsible = false) {
   const label = document.createElement("div");
   label.className = "sidebar-section-label" + (collapsible ? " archived-label" : "");
@@ -427,7 +505,10 @@ function makeSectionLabel(text, collapsible = false) {
 
 function buildConversationItem(conv) {
   const item = document.createElement("div");
-  item.className = "conversation-item" + (conv.id === activeConversationId ? " active" : "") + (conv.pinned ? " pinned" : "");
+  item.className =
+    "conversation-item" +
+    (conv.id === activeConversationId ? " active" : "") +
+    (conv.pinned ? " pinned" : "");
   item.dataset.id = conv.id;
 
   const title = document.createElement("span");
@@ -439,6 +520,7 @@ function buildConversationItem(conv) {
 
   const pinBtn = document.createElement("button");
   pinBtn.className = "conversation-pin-icon" + (conv.pinned ? " active" : "");
+  pinBtn.setAttribute("aria-label", conv.pinned ? "Unpin chat" : "Pin chat");
   pinBtn.title = conv.pinned ? "Unpin" : "Pin";
   pinBtn.innerHTML = "📌";
   pinBtn.addEventListener("click", (e) => {
@@ -447,6 +529,7 @@ function buildConversationItem(conv) {
   });
 
   const archiveBtn = document.createElement("button");
+  archiveBtn.setAttribute("aria-label", conv.archived ? "Unarchive chat" : "Archive chat");
   archiveBtn.title = conv.archived ? "Unarchive" : "Archive";
   archiveBtn.innerHTML = conv.archived ? "📤" : "🗄️";
   archiveBtn.addEventListener("click", (e) => {
@@ -454,8 +537,19 @@ function buildConversationItem(conv) {
     toggleArchive(conv.id);
   });
 
+  const shareIconBtn = document.createElement("button");
+  shareIconBtn.className = "conversation-share-icon" + (conv.shared ? " shared" : "");
+  shareIconBtn.setAttribute("aria-label", "Share this chat");
+  shareIconBtn.title = "Share this chat";
+  shareIconBtn.innerHTML = "🔗";
+  shareIconBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSharePopoverFor(conv);
+  });
+
   const delBtn = document.createElement("button");
   delBtn.className = "conversation-delete";
+  delBtn.setAttribute("aria-label", "Delete chat");
   delBtn.innerHTML = "✕";
   delBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -463,6 +557,7 @@ function buildConversationItem(conv) {
   });
 
   actions.appendChild(pinBtn);
+  actions.appendChild(shareIconBtn);
   actions.appendChild(archiveBtn);
   actions.appendChild(delBtn);
 
@@ -482,10 +577,12 @@ function renderConversationList(filterText = "") {
   const visible = conversations.filter((c) => !c.archived && matches(c));
   const pinned = visible.filter((c) => c.pinned);
   const recent = visible.filter((c) => !c.pinned);
+  const archived = conversations.filter((c) => c.archived && matches(c));
 
   if (pinned.length === 0 && recent.length === 0) {
     const empty = document.createElement("div");
     empty.className = "conversation-empty";
+    empty.id = "conversation-empty";
     empty.textContent = conversations.length === 0 ? "No chats yet" : "No matching chats";
     conversationList.appendChild(empty);
   } else {
@@ -497,6 +594,16 @@ function renderConversationList(filterText = "") {
       if (pinned.length) conversationList.appendChild(makeSectionLabel("Chats"));
       recent.forEach((c) => conversationList.appendChild(buildConversationItem(c)));
     }
+  }
+
+  if (archived.length) {
+    const archLabel = makeSectionLabel(`Archived (${archived.length})`, true);
+    const archContainer = document.createElement("div");
+    archContainer.className = "archived-container hidden";
+    archived.forEach((c) => archContainer.appendChild(buildConversationItem(c)));
+    archLabel.addEventListener("click", () => archContainer.classList.toggle("hidden"));
+    conversationList.appendChild(archLabel);
+    conversationList.appendChild(archContainer);
   }
 }
 
@@ -586,6 +693,7 @@ if (searchChatsInput) {
   });
 }
 
+// ---------- Mobile sidebar open/close wiring ----------
 (function wireSidebarToggles() {
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebar-overlay");
@@ -613,8 +721,13 @@ if (searchChatsInput) {
   if (overlay) overlay.addEventListener("click", collapseSidebar);
 })();
 
+// ---------- Markdown Parser (Supports Headings, Tables, Lists, Bold) ----------
 function renderMarkdown(raw) {
-  const escaped = raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escaped = raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
   const lines = escaped.split("\n");
   let html = "";
   let inTable = false;
@@ -638,6 +751,7 @@ function renderMarkdown(raw) {
 
   lines.forEach((line) => {
     const trimmed = line.trim();
+
     if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
       if (!inTable) inTable = true;
       tableRows.push(trimmed);
@@ -660,6 +774,7 @@ function renderMarkdown(raw) {
       html += `<p>${inlineMd(trimmed)}</p>`;
     }
   });
+
   flushTable();
   return html;
 }
@@ -672,7 +787,10 @@ function inlineMd(text) {
 }
 
 function stripMarkdownForSpeech(text) {
-  return text.replace(/[#*`_>|]/g, "").replace(/\n{2,}/g, ". ").replace(/\n/g, " ");
+  return text
+    .replace(/[#*`_>|]/g, "")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, " ");
 }
 
 function scrollToBottom() {
@@ -682,6 +800,7 @@ function scrollToBottom() {
   });
 }
 
+// ---------- Message action toolbar (copy / feedback / share / read aloud) ----------
 function buildMessageActions(text, extra = {}) {
   const bar = document.createElement("div");
   bar.className = "msg-actions";
@@ -689,97 +808,87 @@ function buildMessageActions(text, extra = {}) {
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.title = "Copy";
-  copyBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>';
+  copyBtn.setAttribute("aria-label", "Copy response");
+  copyBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>';
   copyBtn.addEventListener("click", () => {
     const toCopy = extra.imageUrl ? extra.imageUrl : text;
-    navigator.clipboard.writeText(toCopy).then(() => {
-      const original = copyBtn.title;
-      copyBtn.title = "Copied!";
-      setTimeout(() => (copyBtn.title = original), 1500);
-    });
+    navigator.clipboard
+      .writeText(toCopy)
+      .then(() => {
+        const original = copyBtn.title;
+        copyBtn.title = "Copied!";
+        setTimeout(() => (copyBtn.title = original), 1500);
+      })
+      .catch(() => {});
+  });
+
+  const upBtn = document.createElement("button");
+  upBtn.type = "button";
+  upBtn.title = "Good response";
+  upBtn.setAttribute("aria-label", "Good response");
+  upBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M2 21h2a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H2v11Zm19.83-9.6c.11-.25.17-.53.17-.82V9a2 2 0 0 0-2-2h-5.5l.85-4.11.02-.22c0-.38-.15-.72-.4-.97L13.99 1 7.5 7.5C7.19 7.81 7 8.24 7 8.71V19c0 1.1.9 2 2 2h9a2 2 0 0 0 1.83-1.19l3-6.99Z"/></svg>';
+
+  const downBtn = document.createElement("button");
+  downBtn.type = "button";
+  downBtn.title = "Bad response";
+  downBtn.setAttribute("aria-label", "Bad response");
+  downBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M22 3h-2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h2V3ZM2.17 12.6c-.11.25-.17.53-.17.82V15a2 2 0 0 0 2 2h5.5l-.85 4.11-.02.22c0 .38.15.72.4.97L10.01 23 16.5 16.5c.31-.31.5-.74.5-1.21V5c0-1.1-.9-2-2-2H6a2 2 0 0 0-1.83 1.19l-3 6.99Z"/></svg>';
+
+  upBtn.addEventListener("click", () => {
+    const nowActive = !upBtn.classList.contains("active-feedback-up");
+    upBtn.classList.toggle("active-feedback-up", nowActive);
+    downBtn.classList.remove("active-feedback-down");
+  });
+  downBtn.addEventListener("click", () => {
+    const nowActive = !downBtn.classList.contains("active-feedback-down");
+    downBtn.classList.toggle("active-feedback-down", nowActive);
+    upBtn.classList.remove("active-feedback-up");
+  });
+
+  const shareBtn = document.createElement("button");
+  shareBtn.type = "button";
+  shareBtn.title = "Share";
+  shareBtn.setAttribute("aria-label", "Share response");
+  shareBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A3 3 0 1 0 6 14.7l7.13 4.15c-.05.21-.08.43-.08.65a2.99 2.99 0 1 0 4.95-2.42Z"/></svg>';
+  shareBtn.addEventListener("click", async () => {
+    const shareText = extra.imageUrl ? extra.imageUrl : text;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Aura AI", text: shareText });
+      } catch (e) {
+        /* user cancelled share sheet — ignore */
+      }
+    } else {
+      navigator.clipboard.writeText(shareText).catch(() => {});
+      const original = shareBtn.title;
+      shareBtn.title = "Copied to share!";
+      setTimeout(() => (shareBtn.title = original), 1500);
+    }
   });
 
   const speakBtn = document.createElement("button");
   speakBtn.type = "button";
   speakBtn.title = "Read aloud";
-  speakBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3Zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Z"/></svg>';
+  speakBtn.setAttribute("aria-label", "Read response aloud");
+  speakBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3Zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Z"/></svg>';
   speakBtn.addEventListener("click", () => {
     if (!extra.imageUrl) speakText(text);
   });
 
   bar.appendChild(copyBtn);
+  bar.appendChild(upBtn);
+  bar.appendChild(downBtn);
+  bar.appendChild(shareBtn);
   if (!extra.imageUrl) bar.appendChild(speakBtn);
   return bar;
 }
 
-// User message action toolbar: Copy & Edit feature
-function buildUserMessageActions(messageWrapper, bubbleEl, text, msgIndex) {
-  const bar = document.createElement("div");
-  bar.className = "user-msg-actions";
-
-  const copyBtn = document.createElement("button");
-  copyBtn.type = "button";
-  copyBtn.title = "Copy";
-  copyBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>';
-  copyBtn.addEventListener("click", () => {
-    navigator.clipboard.writeText(text).then(() => {
-      copyBtn.title = "Copied!";
-      setTimeout(() => (copyBtn.title = "Copy"), 1500);
-    });
-  });
-
-  const editBtn = document.createElement("button");
-  editBtn.type = "button";
-  editBtn.title = "Edit message";
-  editBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25ZM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.995.995 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z"/></svg>';
-  editBtn.addEventListener("click", () => {
-    bubbleEl.innerHTML = "";
-    const wrap = document.createElement("div");
-    wrap.className = "user-msg-content-wrap";
-
-    const textarea = document.createElement("textarea");
-    textarea.className = "user-msg-edit-area";
-    textarea.value = text;
-    wrap.appendChild(textarea);
-
-    const btnRow = document.createElement("div");
-    btnRow.className = "user-msg-edit-buttons";
-
-    const saveBtn = document.createElement("button");
-    saveBtn.className = "save-edit-btn";
-    saveBtn.textContent = "Save & Submit";
-    saveBtn.addEventListener("click", () => {
-      const newVal = textarea.value.trim();
-      if (!newVal) return;
-      const conv = getActiveConversation();
-      if (conv && conv.messages[msgIndex]) {
-        conv.messages[msgIndex].text = newVal;
-        // Truncate subsequent messages if editing previous conversation turns
-        conv.messages = conv.messages.slice(0, msgIndex + 1);
-        saveConversationsToStorage();
-        loadConversation(conv.id);
-        sendMessage(newVal);
-      }
-    });
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.addEventListener("click", () => {
-      loadConversation(activeConversationId);
-    });
-
-    btnRow.appendChild(saveBtn);
-    btnRow.appendChild(cancelBtn);
-    wrap.appendChild(btnRow);
-    bubbleEl.appendChild(wrap);
-    textarea.focus();
-  });
-
-  bar.appendChild(copyBtn);
-  bar.appendChild(editBtn);
-  return bar;
-}
-
+// ---------- Generated-image action row (download / regenerate) ----------
 function buildGeneratedImageActions(imageUrl, prompt, ratio) {
   const row = document.createElement("div");
   row.className = "generated-image-actions";
@@ -818,25 +927,23 @@ function buildGeneratedImageActions(imageUrl, prompt, ratio) {
 
 function ratioToDimensions(ratio) {
   switch (ratio) {
-    case "16:9": return { width: 1280, height: 720 };
-    case "9:16": return { width: 720, height: 1280 };
-    case "4:3": return { width: 1024, height: 768 };
+    case "16:9": return { width: 1024, height: 576 };
+    case "9:16": return { width: 576, height: 1024 };
+    case "4:3": return { width: 896, height: 672 };
     case "1:1":
-    default: return { width: 1024, height: 1024 };
+    default: return { width: 768, height: 768 };
   }
 }
 
 async function regenerateImage(prompt, ratio) {
-  addTypingIndicator("Generating realistic version...");
+  addTypingIndicator("Generating a new version...");
   try {
     const { width, height } = ratioToDimensions(ratio || "1:1");
     const seed = Math.floor(Math.random() * 1000000);
-    // Highly enhanced realistic prompt modifiers appended automatically for realism
-    const realPrompt = `${prompt}, hyper-realistic, photorealistic, cinematic lighting, 8k resolution, highly detailed, masterclass photography`;
-    const imageUrl = `${IMAGE_API}${encodeURIComponent(realPrompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+    const imageUrl = `${IMAGE_API}${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
     await preloadImage(imageUrl);
     removeTypingIndicator();
-    addMessage("assistant", `Here is your realistic generated image for: "${prompt}"`, {
+    addMessage("assistant", `Here's your generated image for: "${prompt}"`, {
       imageUrl,
       imagePrompt: prompt,
       imageRatio: ratio,
@@ -847,6 +954,7 @@ async function regenerateImage(prompt, ratio) {
   }
 }
 
+// ---------- File type helpers ----------
 function classifyFile(file) {
   const type = file.type || "";
   if (type.startsWith("image/")) return "image";
@@ -870,6 +978,7 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// ---------- Attachments (multi-file upload with previews) ----------
 function renderFileChips() {
   if (!fileChipsContainer) return;
   fileChipsContainer.innerHTML = "";
@@ -893,17 +1002,20 @@ function renderFileChips() {
 
     const name = document.createElement("span");
     name.className = "file-chip-name";
+    name.title = att.file.name;
     name.textContent = `${att.file.name} · ${formatFileSize(att.file.size)}`;
     chip.appendChild(name);
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
+    removeBtn.setAttribute("aria-label", "Remove attachment");
     removeBtn.textContent = "✕";
     removeBtn.addEventListener("click", () => {
       pendingAttachments = pendingAttachments.filter((a) => a.id !== att.id);
       renderFileChips();
     });
     chip.appendChild(removeBtn);
+
     fileChipsContainer.appendChild(chip);
   });
 }
@@ -933,7 +1045,9 @@ function addFilesToAttachments(fileList) {
 }
 
 if (attachBtn) {
-  attachBtn.addEventListener("click", () => { if (fileInput) fileInput.click(); });
+  attachBtn.addEventListener("click", () => {
+    if (fileInput) fileInput.click();
+  });
 }
 if (fileInput) {
   fileInput.addEventListener("change", () => {
@@ -964,10 +1078,26 @@ function renderAttachmentsInBubble(attachments) {
   return wrap;
 }
 
-function renderMessageBubble(role, text, extra = {}, msgIndex = 0) {
+// Renders a bubble WITHOUT touching storage (used when replaying saved history)
+function renderMessageBubble(role, text, extra = {}) {
   if (!chatMessagesInner) return;
   const wrapper = document.createElement("div");
   wrapper.className = `message ${role === "user" ? "message-user" : "message-ai"}`;
+
+  const avatar = document.createElement("div");
+  if (role === "user") {
+    const avatarData = getStoredAvatar();
+    if (avatarData) {
+      avatar.className = "avatar avatar-user has-image";
+      avatar.innerHTML = `<img class="avatar-img" src="${avatarData}" alt="You"/>`;
+    } else {
+      avatar.className = "avatar avatar-user";
+      avatar.textContent = getInitials(getCurrentUserName());
+    }
+  } else {
+    avatar.className = "avatar avatar-ai";
+    avatar.innerHTML = "✨";
+  }
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
@@ -980,8 +1110,6 @@ function renderMessageBubble(role, text, extra = {}, msgIndex = 0) {
       p.textContent = text;
       bubble.appendChild(p);
     }
-    wrapper.appendChild(bubble);
-    wrapper.appendChild(buildUserMessageActions(wrapper, bubble, text, msgIndex));
   } else if (extra.imageUrl) {
     const img = document.createElement("img");
     img.className = "ai-generated-image";
@@ -990,23 +1118,26 @@ function renderMessageBubble(role, text, extra = {}, msgIndex = 0) {
     img.loading = "lazy";
     bubble.appendChild(img);
     bubble.appendChild(buildGeneratedImageActions(extra.imageUrl, extra.imagePrompt || "", extra.imageRatio));
-    wrapper.appendChild(bubble);
-    wrapper.appendChild(buildMessageActions(text, extra));
   } else {
     bubble.innerHTML = renderMarkdown(text);
-    wrapper.appendChild(bubble);
+  }
+
+  wrapper.appendChild(avatar);
+  wrapper.appendChild(bubble);
+
+  if (role !== "user") {
     wrapper.appendChild(buildMessageActions(text, extra));
   }
 
   chatMessagesInner.appendChild(wrapper);
 }
 
+// Renders a bubble AND saves it into the active conversation's history
 function addMessage(role, text, extra = {}) {
-  const conv = getActiveConversation();
-  const msgIndex = conv && conv.messages ? conv.messages.length : 0;
-  renderMessageBubble(role, text, extra, msgIndex);
+  renderMessageBubble(role, text, extra);
   scrollToBottom();
 
+  const conv = getActiveConversation();
   if (conv) {
     conv.messages = conv.messages || [];
     conv.messages.push({ role, text, ...extra });
@@ -1019,7 +1150,7 @@ function addTypingIndicator(label = "Thinking...") {
   const wrapper = document.createElement("div");
   wrapper.className = "message message-ai";
   wrapper.id = "typing-indicator";
-  wrapper.innerHTML = `<div class="bubble">${label}</div>`;
+  wrapper.innerHTML = `<div class="avatar avatar-ai">✨</div><div class="bubble">${label}</div>`;
   chatMessagesInner.appendChild(wrapper);
   scrollToBottom();
 }
@@ -1029,6 +1160,7 @@ function removeTypingIndicator() {
   if (el) el.remove();
 }
 
+// ---------- Voice output (text-to-speech) ----------
 function speakText(text) {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
@@ -1040,12 +1172,20 @@ if (voiceOutputToggle) {
   voiceOutputToggle.addEventListener("click", () => {
     isVoiceOutputEnabled = !isVoiceOutputEnabled;
     voiceOutputToggle.classList.toggle("active", isVoiceOutputEnabled);
+    voiceOutputToggle.title = isVoiceOutputEnabled
+      ? "Voice replies: on (AI speaks answers aloud)"
+      : "Voice replies (AI speaks answers aloud)";
+    if (!isVoiceOutputEnabled && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
   });
 }
 
+// ---------- Voice input (speech-to-text) ----------
 function initSpeechRecognition() {
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognitionCtor) return null;
+
   const rec = new SpeechRecognitionCtor();
   rec.lang = "en-US";
   rec.interimResults = false;
@@ -1058,8 +1198,14 @@ function initSpeechRecognition() {
       chatInput.focus();
     }
   };
-  rec.onend = () => { isRecording = false; if (micBtn) micBtn.classList.remove("active"); };
-  rec.onerror = () => { isRecording = false; if (micBtn) micBtn.classList.remove("active"); };
+  rec.onend = () => {
+    isRecording = false;
+    if (micBtn) micBtn.classList.remove("active");
+  };
+  rec.onerror = () => {
+    isRecording = false;
+    if (micBtn) micBtn.classList.remove("active");
+  };
   return rec;
 }
 
@@ -1067,7 +1213,7 @@ if (micBtn) {
   micBtn.addEventListener("click", () => {
     if (!recognition) recognition = initSpeechRecognition();
     if (!recognition) {
-      addMessage("assistant", "Voice input isn't supported in this browser.");
+      addMessage("assistant", "Voice input isn't supported in this browser. Try Chrome or Edge.");
       return;
     }
     if (isRecording) {
@@ -1079,18 +1225,26 @@ if (micBtn) {
         recognition.start();
         isRecording = true;
         micBtn.classList.add("active");
-      } catch (e) {}
+      } catch (e) {
+        /* already started — ignore */
+      }
     }
   });
 }
 
+// ---------- Image generation mode (with aspect ratio picker) ----------
 if (imageGenBtn) {
   imageGenBtn.addEventListener("click", () => {
     isImageMode = !isImageMode;
     imageGenBtn.classList.toggle("active", isImageMode);
+    imageGenBtn.title = isImageMode
+      ? "Image generation mode: on"
+      : "Generate an image instead of text";
     if (imageGenBar) imageGenBar.style.display = isImageMode ? "flex" : "none";
     if (chatInput) {
-      chatInput.placeholder = isImageMode ? "Describe the photorealistic image you want to generate..." : "Message Aura AI...";
+      chatInput.placeholder = isImageMode
+        ? "Describe the image you want to generate..."
+        : "Message Aura AI...";
     }
   });
 }
@@ -1115,23 +1269,24 @@ function preloadImage(url) {
 }
 
 async function sendImageGenerationRequest(prompt) {
-  addTypingIndicator("Generating photorealistic image...");
+  addTypingIndicator("Generating image...");
   try {
     const { width, height } = ratioToDimensions(selectedAspectRatio);
     const seed = Math.floor(Math.random() * 1000000);
-    // Force hyper-realistic parameters into the image generation link
-    const realPrompt = `${prompt}, highly detailed, photorealistic, 8k resolution, cinematic lighting, ultra-realistic photography`;
-    const imageUrl = `${IMAGE_API}${encodeURIComponent(realPrompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+    const imageUrl = `${IMAGE_API}${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
     await preloadImage(imageUrl);
     removeTypingIndicator();
-    addMessage("assistant", `Here is your realistic image for: "${prompt}"`, {
+    addMessage("assistant", `Here's your generated image for: "${prompt}"`, {
       imageUrl,
       imagePrompt: prompt,
       imageRatio: selectedAspectRatio,
     });
   } catch (err) {
     removeTypingIndicator();
-    addMessage("assistant", "Couldn't generate that image. Please try again.");
+    addMessage(
+      "assistant",
+      "Couldn't generate that image. Please try a different prompt or check your connection."
+    );
   } finally {
     isSending = false;
     if (sendBtn) sendBtn.disabled = false;
@@ -1139,6 +1294,7 @@ async function sendImageGenerationRequest(prompt) {
   }
 }
 
+// ---------- Sending messages ----------
 function ensureActiveConversation(promptText) {
   if (activeConversationId) return;
   activeConversationId = Date.now().toString();
@@ -1166,6 +1322,7 @@ async function sendMessage(text) {
   if (sendBtn) sendBtn.disabled = true;
   if (quickPromptsContainer) quickPromptsContainer.classList.add("hidden");
 
+  // Snapshot attachments for this message (small ones get inline previews)
   const attachmentsSnapshot = pendingAttachments.map((att) => ({
     name: att.file.name,
     kind: att.kind,
@@ -1243,11 +1400,28 @@ quickButtons.forEach((btn) => {
   });
 });
 
+/* =========================================================================
+   SHARE: per-chat + whole-chat sharing via link, WhatsApp, email, Web Share
+   -------------------------------------------------------------------------
+   Note (honesty about limits): Aura AI has no backend/database in this
+   build, so a "shared link" works by encoding the conversation directly
+   into the URL itself (after #share=...). Anyone with the link can open
+   and read it — no server round-trip needed. Because of that, "Stop
+   sharing" can only mark the link as revoked *on this device/browser*
+   (so if you re-open your own link here, you'll see it's been stopped);
+   it cannot invalidate a copy someone already opened on another device,
+   since there is no server to check against. For true revocation across
+   devices you'd need a small backend endpoint to store/check share state.
+   ========================================================================= */
+
 const REVOKED_SHARES_KEY = "aura_revoked_shares";
 
 function getRevokedShareIds() {
-  try { return JSON.parse(localStorage.getItem(REVOKED_SHARES_KEY) || "[]"); }
-  catch (e) { return []; }
+  try {
+    return JSON.parse(localStorage.getItem(REVOKED_SHARES_KEY) || "[]");
+  } catch (e) {
+    return [];
+  }
 }
 function addRevokedShareId(id) {
   const ids = getRevokedShareIds();
@@ -1316,19 +1490,37 @@ function closeSharePopover() {
 }
 
 if (shareChatBtn) {
-  shareChatBtn.addEventListener("click", () => { openSharePopoverFor(getActiveConversation()); });
+  shareChatBtn.addEventListener("click", () => {
+    openSharePopoverFor(getActiveConversation());
+  });
 }
 if (closeSharePopoverBtn) closeSharePopoverBtn.addEventListener("click", closeSharePopover);
+
+document.addEventListener("click", (e) => {
+  if (
+    sharePopover &&
+    sharePopover.classList.contains("visible") &&
+    !sharePopover.contains(e.target) &&
+    e.target !== shareChatBtn &&
+    !shareChatBtn?.contains(e.target) &&
+    !e.target.closest(".conversation-share-icon")
+  ) {
+    closeSharePopover();
+  }
+});
 
 if (copyShareLinkBtn) {
   copyShareLinkBtn.addEventListener("click", () => {
     if (!shareLinkInput || !currentShareConv) return;
-    navigator.clipboard.writeText(shareLinkInput.value).then(() => {
-      markConversationShared(currentShareConv);
-      const original = copyShareLinkBtn.textContent;
-      copyShareLinkBtn.textContent = "Copied!";
-      setTimeout(() => (copyShareLinkBtn.textContent = original), 1500);
-    });
+    navigator.clipboard
+      .writeText(shareLinkInput.value)
+      .then(() => {
+        markConversationShared(currentShareConv);
+        const original = copyShareLinkBtn.textContent;
+        copyShareLinkBtn.textContent = "Copied!";
+        setTimeout(() => (copyShareLinkBtn.textContent = original), 1500);
+      })
+      .catch(() => {});
   });
 }
 
@@ -1356,7 +1548,16 @@ if (shareMoreBtn) {
     if (!shareLinkInput || !currentShareConv) return;
     markConversationShared(currentShareConv);
     if (navigator.share) {
-      try { await navigator.share({ title: "Aura AI", url: shareLinkInput.value }); } catch (e) {}
+      try {
+        await navigator.share({ title: "Aura AI", url: shareLinkInput.value });
+      } catch (e) {
+        /* cancelled */
+      }
+    } else {
+      navigator.clipboard.writeText(shareLinkInput.value).catch(() => {});
+      const original = shareMoreBtn.textContent;
+      shareMoreBtn.textContent = "Link copied!";
+      setTimeout(() => (shareMoreBtn.textContent = original), 1500);
     }
   });
 }
@@ -1372,8 +1573,10 @@ if (stopShareBtn) {
   });
 }
 
+// ---------- Shared-chat read-only viewer (opened via #share=... link) ----------
 function renderSharedView(shareObj) {
   if (!sharedViewMessages || !sharedViewTitle || !sharedViewOverlay) return;
+
   const revoked = getRevokedShareIds().includes(shareObj.id);
   sharedViewTitle.textContent = shareObj.title || "Shared chat";
   sharedViewMessages.innerHTML = "";
@@ -1381,7 +1584,7 @@ function renderSharedView(shareObj) {
   if (revoked) {
     const notice = document.createElement("div");
     notice.className = "conversation-empty";
-    notice.textContent = "This shared chat is no longer available.";
+    notice.textContent = "This shared chat is no longer available — sharing was stopped on the original device.";
     sharedViewMessages.appendChild(notice);
   } else {
     (shareObj.messages || []).forEach((m) => {
@@ -1393,6 +1596,7 @@ function renderSharedView(shareObj) {
         const img = document.createElement("img");
         img.className = "ai-generated-image";
         img.src = m.imageUrl;
+        img.alt = m.imagePrompt || "Generated image";
         bubble.appendChild(img);
       } else if (m.role === "user") {
         bubble.textContent = m.text;
@@ -1403,8 +1607,10 @@ function renderSharedView(shareObj) {
       sharedViewMessages.appendChild(wrapper);
     });
   }
+
   sharedViewOverlay.classList.add("visible");
   openInAuraBtn.style.display = revoked ? "none" : "inline-flex";
+  openInAuraBtn.dataset.shareId = shareObj.id;
   openInAuraBtn._shareObj = shareObj;
 }
 
@@ -1415,7 +1621,9 @@ function checkForSharedLinkOnLoad() {
     const encoded = hash.replace("#share=", "");
     const shareObj = decodeShareData(decodeURIComponent(encoded));
     renderSharedView(shareObj);
-  } catch (e) {}
+  } catch (e) {
+    console.error("Couldn't parse shared chat link", e);
+  }
 }
 
 if (closeSharedViewBtn) {
@@ -1433,7 +1641,12 @@ if (openInAuraBtn) {
     conversations.unshift({
       id: newId,
       title: shareObj.title || "Shared chat",
-      messages: shareObj.messages || [],
+      messages: (shareObj.messages || []).map((m) => ({
+        role: m.role,
+        text: m.text,
+        imageUrl: m.imageUrl,
+        imagePrompt: m.imagePrompt,
+      })),
       pinned: false,
       archived: false,
     });
@@ -1447,8 +1660,19 @@ if (openInAuraBtn) {
 window.addEventListener("load", checkForSharedLinkOnLoad);
 window.addEventListener("hashchange", checkForSharedLinkOnLoad);
 
+/* =========================================================================
+   LIVE ASSISTANT: share your screen and ask Aura AI about what's on it.
+   Uses getDisplayMedia (needs HTTPS + user permission). Captures a still
+   frame on demand and attaches it to your next message — there's no
+   backend vision model wired up in this build, so the frame is sent the
+   same way any other image attachment is sent to your chat endpoint.
+   ========================================================================= */
+
 async function startLiveAssistant() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    addMessage("assistant", "Screen sharing isn't supported in this browser.");
+    return;
+  }
   try {
     liveStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
     if (liveAssistantVideo) liveAssistantVideo.srcObject = liveStream;
@@ -1456,7 +1680,9 @@ async function startLiveAssistant() {
     if (liveAssistantBtn) liveAssistantBtn.classList.add("active");
     const [track] = liveStream.getVideoTracks();
     if (track) track.addEventListener("ended", stopLiveAssistant);
-  } catch (e) {}
+  } catch (e) {
+    addMessage("assistant", "Couldn't start screen sharing — permission was denied or cancelled.");
+  }
 }
 
 function stopLiveAssistant() {
@@ -1481,8 +1707,11 @@ function captureScreenFrame() {
 
 if (liveAssistantBtn) {
   liveAssistantBtn.addEventListener("click", () => {
-    if (liveStream) stopLiveAssistant();
-    else startLiveAssistant();
+    if (liveStream) {
+      stopLiveAssistant();
+    } else {
+      startLiveAssistant();
+    }
   });
 }
 if (closeLiveAssistantBtn) closeLiveAssistantBtn.addEventListener("click", stopLiveAssistant);
@@ -1491,7 +1720,10 @@ if (stopLiveAssistantBtn) stopLiveAssistantBtn.addEventListener("click", stopLiv
 if (askAboutScreenBtn) {
   askAboutScreenBtn.addEventListener("click", () => {
     const dataUrl = captureScreenFrame();
-    if (!dataUrl) return;
+    if (!dataUrl) {
+      addMessage("assistant", "Couldn't capture the screen yet — give it a second and try again.");
+      return;
+    }
     const fakeFile = { name: `screen-${Date.now()}.png`, size: Math.round(dataUrl.length * 0.75) };
     pendingAttachments.push({ id: `${Date.now()}-screen`, file: fakeFile, kind: "image", dataUrl });
     renderFileChips();
