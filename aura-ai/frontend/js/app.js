@@ -46,6 +46,33 @@ const accountSwitcherBtn = document.getElementById("account-switcher-btn");
 const accountSwitcherPopover = document.getElementById("account-switcher-popover");
 const accountSwitcherList = document.getElementById("account-switcher-list");
 
+// Share (per-chat + whole app) elements
+const shareChatBtn = document.getElementById("share-chat-btn");
+const sharePopover = document.getElementById("share-popover");
+const sharePopoverTitle = document.getElementById("share-popover-title");
+const closeSharePopoverBtn = document.getElementById("close-share-popover-btn");
+const shareLinkInput = document.getElementById("share-link-input");
+const copyShareLinkBtn = document.getElementById("copy-share-link-btn");
+const shareWhatsappBtn = document.getElementById("share-whatsapp-btn");
+const shareEmailBtn = document.getElementById("share-email-btn");
+const shareMoreBtn = document.getElementById("share-more-btn");
+const stopShareBtn = document.getElementById("stop-share-btn");
+
+// Shared-chat read-only viewer elements
+const sharedViewOverlay = document.getElementById("shared-view-overlay");
+const sharedViewTitle = document.getElementById("shared-view-title");
+const sharedViewMessages = document.getElementById("shared-view-messages");
+const closeSharedViewBtn = document.getElementById("close-shared-view-btn");
+const openInAuraBtn = document.getElementById("open-in-aura-btn");
+
+// Live assistant (screen share) elements
+const liveAssistantBtn = document.getElementById("live-assistant-btn");
+const liveAssistantPanel = document.getElementById("live-assistant-panel");
+const liveAssistantVideo = document.getElementById("live-assistant-video");
+const closeLiveAssistantBtn = document.getElementById("close-live-assistant-btn");
+const stopLiveAssistantBtn = document.getElementById("stop-live-assistant-btn");
+const askAboutScreenBtn = document.getElementById("ask-about-screen-btn");
+
 // Settings modal elements
 const openSettingsBtn = document.getElementById("open-settings-btn");
 const closeSettingsBtn = document.getElementById("close-settings-btn");
@@ -70,6 +97,8 @@ let recognition = null;
 let activeConversationId = null;
 let conversations = [];
 let pendingAttachments = []; // [{id, file, kind, dataUrl?}]
+let currentShareConv = null;
+let liveStream = null;
 
 const WELCOME_HTML = `
   <div class="message message-ai">
@@ -508,6 +537,16 @@ function buildConversationItem(conv) {
     toggleArchive(conv.id);
   });
 
+  const shareIconBtn = document.createElement("button");
+  shareIconBtn.className = "conversation-share-icon" + (conv.shared ? " shared" : "");
+  shareIconBtn.setAttribute("aria-label", "Share this chat");
+  shareIconBtn.title = "Share this chat";
+  shareIconBtn.innerHTML = "🔗";
+  shareIconBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSharePopoverFor(conv);
+  });
+
   const delBtn = document.createElement("button");
   delBtn.className = "conversation-delete";
   delBtn.setAttribute("aria-label", "Delete chat");
@@ -518,6 +557,7 @@ function buildConversationItem(conv) {
   });
 
   actions.appendChild(pinBtn);
+  actions.appendChild(shareIconBtn);
   actions.appendChild(archiveBtn);
   actions.appendChild(delBtn);
 
@@ -1359,3 +1399,337 @@ quickButtons.forEach((btn) => {
     chatInput.focus();
   });
 });
+
+/* =========================================================================
+   SHARE: per-chat + whole-chat sharing via link, WhatsApp, email, Web Share
+   -------------------------------------------------------------------------
+   Note (honesty about limits): Aura AI has no backend/database in this
+   build, so a "shared link" works by encoding the conversation directly
+   into the URL itself (after #share=...). Anyone with the link can open
+   and read it — no server round-trip needed. Because of that, "Stop
+   sharing" can only mark the link as revoked *on this device/browser*
+   (so if you re-open your own link here, you'll see it's been stopped);
+   it cannot invalidate a copy someone already opened on another device,
+   since there is no server to check against. For true revocation across
+   devices you'd need a small backend endpoint to store/check share state.
+   ========================================================================= */
+
+const REVOKED_SHARES_KEY = "aura_revoked_shares";
+
+function getRevokedShareIds() {
+  try {
+    return JSON.parse(localStorage.getItem(REVOKED_SHARES_KEY) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+function addRevokedShareId(id) {
+  const ids = getRevokedShareIds();
+  if (!ids.includes(id)) {
+    ids.push(id);
+    localStorage.setItem(REVOKED_SHARES_KEY, JSON.stringify(ids));
+  }
+}
+function removeRevokedShareId(id) {
+  const ids = getRevokedShareIds().filter((x) => x !== id);
+  localStorage.setItem(REVOKED_SHARES_KEY, JSON.stringify(ids));
+}
+
+function buildShareableConversation(conv) {
+  return {
+    id: conv.id,
+    title: conv.title,
+    messages: (conv.messages || []).map((m) => ({
+      role: m.role,
+      text: m.text || "",
+      imageUrl: m.imageUrl || undefined,
+      imagePrompt: m.imagePrompt || undefined,
+      attachmentNames: (m.attachments || []).map((a) => a.name),
+    })),
+  };
+}
+
+function encodeShareData(obj) {
+  const json = JSON.stringify(obj);
+  return btoa(unescape(encodeURIComponent(json)));
+}
+function decodeShareData(str) {
+  return JSON.parse(decodeURIComponent(escape(atob(str))));
+}
+
+function buildShareUrl(conv) {
+  const data = encodeShareData(buildShareableConversation(conv));
+  const url = new URL(window.location.href.split("#")[0]);
+  url.hash = `share=${data}`;
+  return url.toString();
+}
+
+function markConversationShared(conv) {
+  conv.shared = true;
+  removeRevokedShareId(conv.id);
+  saveConversationsToStorage();
+  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
+  if (stopShareBtn) stopShareBtn.disabled = false;
+}
+
+function openSharePopoverFor(conv) {
+  if (!conv) {
+    addMessage("assistant", "Start or open a chat first, then you can share it.");
+    return;
+  }
+  currentShareConv = conv;
+  const link = buildShareUrl(conv);
+  if (shareLinkInput) shareLinkInput.value = link;
+  if (sharePopoverTitle) sharePopoverTitle.textContent = `Share "${conv.title}"`;
+  if (stopShareBtn) stopShareBtn.disabled = !conv.shared;
+  if (sharePopover) sharePopover.classList.add("visible");
+}
+
+function closeSharePopover() {
+  if (sharePopover) sharePopover.classList.remove("visible");
+}
+
+if (shareChatBtn) {
+  shareChatBtn.addEventListener("click", () => {
+    openSharePopoverFor(getActiveConversation());
+  });
+}
+if (closeSharePopoverBtn) closeSharePopoverBtn.addEventListener("click", closeSharePopover);
+
+document.addEventListener("click", (e) => {
+  if (
+    sharePopover &&
+    sharePopover.classList.contains("visible") &&
+    !sharePopover.contains(e.target) &&
+    e.target !== shareChatBtn &&
+    !shareChatBtn?.contains(e.target) &&
+    !e.target.closest(".conversation-share-icon")
+  ) {
+    closeSharePopover();
+  }
+});
+
+if (copyShareLinkBtn) {
+  copyShareLinkBtn.addEventListener("click", () => {
+    if (!shareLinkInput || !currentShareConv) return;
+    navigator.clipboard
+      .writeText(shareLinkInput.value)
+      .then(() => {
+        markConversationShared(currentShareConv);
+        const original = copyShareLinkBtn.textContent;
+        copyShareLinkBtn.textContent = "Copied!";
+        setTimeout(() => (copyShareLinkBtn.textContent = original), 1500);
+      })
+      .catch(() => {});
+  });
+}
+
+if (shareWhatsappBtn) {
+  shareWhatsappBtn.addEventListener("click", () => {
+    if (!shareLinkInput || !currentShareConv) return;
+    markConversationShared(currentShareConv);
+    const text = `Check out this Aura AI chat: ${shareLinkInput.value}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  });
+}
+
+if (shareEmailBtn) {
+  shareEmailBtn.addEventListener("click", () => {
+    if (!shareLinkInput || !currentShareConv) return;
+    markConversationShared(currentShareConv);
+    const subject = encodeURIComponent(`Aura AI chat: ${currentShareConv.title}`);
+    const body = encodeURIComponent(`Here's a chat from Aura AI:\n${shareLinkInput.value}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  });
+}
+
+if (shareMoreBtn) {
+  shareMoreBtn.addEventListener("click", async () => {
+    if (!shareLinkInput || !currentShareConv) return;
+    markConversationShared(currentShareConv);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Aura AI", url: shareLinkInput.value });
+      } catch (e) {
+        /* cancelled */
+      }
+    } else {
+      navigator.clipboard.writeText(shareLinkInput.value).catch(() => {});
+      const original = shareMoreBtn.textContent;
+      shareMoreBtn.textContent = "Link copied!";
+      setTimeout(() => (shareMoreBtn.textContent = original), 1500);
+    }
+  });
+}
+
+if (stopShareBtn) {
+  stopShareBtn.addEventListener("click", () => {
+    if (!currentShareConv) return;
+    currentShareConv.shared = false;
+    addRevokedShareId(currentShareConv.id);
+    saveConversationsToStorage();
+    renderConversationList(searchChatsInput ? searchChatsInput.value : "");
+    stopShareBtn.disabled = true;
+  });
+}
+
+// ---------- Shared-chat read-only viewer (opened via #share=... link) ----------
+function renderSharedView(shareObj) {
+  if (!sharedViewMessages || !sharedViewTitle || !sharedViewOverlay) return;
+
+  const revoked = getRevokedShareIds().includes(shareObj.id);
+  sharedViewTitle.textContent = shareObj.title || "Shared chat";
+  sharedViewMessages.innerHTML = "";
+
+  if (revoked) {
+    const notice = document.createElement("div");
+    notice.className = "conversation-empty";
+    notice.textContent = "This shared chat is no longer available — sharing was stopped on the original device.";
+    sharedViewMessages.appendChild(notice);
+  } else {
+    (shareObj.messages || []).forEach((m) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = `message ${m.role === "user" ? "message-user" : "message-ai"}`;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      if (m.imageUrl) {
+        const img = document.createElement("img");
+        img.className = "ai-generated-image";
+        img.src = m.imageUrl;
+        img.alt = m.imagePrompt || "Generated image";
+        bubble.appendChild(img);
+      } else if (m.role === "user") {
+        bubble.textContent = m.text;
+      } else {
+        bubble.innerHTML = renderMarkdown(m.text || "");
+      }
+      wrapper.appendChild(bubble);
+      sharedViewMessages.appendChild(wrapper);
+    });
+  }
+
+  sharedViewOverlay.classList.add("visible");
+  openInAuraBtn.style.display = revoked ? "none" : "inline-flex";
+  openInAuraBtn.dataset.shareId = shareObj.id;
+  openInAuraBtn._shareObj = shareObj;
+}
+
+function checkForSharedLinkOnLoad() {
+  const hash = window.location.hash || "";
+  if (!hash.startsWith("#share=")) return;
+  try {
+    const encoded = hash.replace("#share=", "");
+    const shareObj = decodeShareData(decodeURIComponent(encoded));
+    renderSharedView(shareObj);
+  } catch (e) {
+    console.error("Couldn't parse shared chat link", e);
+  }
+}
+
+if (closeSharedViewBtn) {
+  closeSharedViewBtn.addEventListener("click", () => {
+    sharedViewOverlay.classList.remove("visible");
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  });
+}
+
+if (openInAuraBtn) {
+  openInAuraBtn.addEventListener("click", () => {
+    const shareObj = openInAuraBtn._shareObj;
+    if (!shareObj) return;
+    const newId = `imported-${Date.now()}`;
+    conversations.unshift({
+      id: newId,
+      title: shareObj.title || "Shared chat",
+      messages: (shareObj.messages || []).map((m) => ({
+        role: m.role,
+        text: m.text,
+        imageUrl: m.imageUrl,
+        imagePrompt: m.imagePrompt,
+      })),
+      pinned: false,
+      archived: false,
+    });
+    saveConversationsToStorage();
+    sharedViewOverlay.classList.remove("visible");
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    loadConversation(newId);
+  });
+}
+
+window.addEventListener("load", checkForSharedLinkOnLoad);
+window.addEventListener("hashchange", checkForSharedLinkOnLoad);
+
+/* =========================================================================
+   LIVE ASSISTANT: share your screen and ask Aura AI about what's on it.
+   Uses getDisplayMedia (needs HTTPS + user permission). Captures a still
+   frame on demand and attaches it to your next message — there's no
+   backend vision model wired up in this build, so the frame is sent the
+   same way any other image attachment is sent to your chat endpoint.
+   ========================================================================= */
+
+async function startLiveAssistant() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    addMessage("assistant", "Screen sharing isn't supported in this browser.");
+    return;
+  }
+  try {
+    liveStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
+    if (liveAssistantVideo) liveAssistantVideo.srcObject = liveStream;
+    if (liveAssistantPanel) liveAssistantPanel.classList.add("visible");
+    if (liveAssistantBtn) liveAssistantBtn.classList.add("active");
+    const [track] = liveStream.getVideoTracks();
+    if (track) track.addEventListener("ended", stopLiveAssistant);
+  } catch (e) {
+    addMessage("assistant", "Couldn't start screen sharing — permission was denied or cancelled.");
+  }
+}
+
+function stopLiveAssistant() {
+  if (liveStream) {
+    liveStream.getTracks().forEach((t) => t.stop());
+    liveStream = null;
+  }
+  if (liveAssistantVideo) liveAssistantVideo.srcObject = null;
+  if (liveAssistantPanel) liveAssistantPanel.classList.remove("visible");
+  if (liveAssistantBtn) liveAssistantBtn.classList.remove("active");
+}
+
+function captureScreenFrame() {
+  if (!liveAssistantVideo || !liveAssistantVideo.videoWidth) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = liveAssistantVideo.videoWidth;
+  canvas.height = liveAssistantVideo.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(liveAssistantVideo, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
+}
+
+if (liveAssistantBtn) {
+  liveAssistantBtn.addEventListener("click", () => {
+    if (liveStream) {
+      stopLiveAssistant();
+    } else {
+      startLiveAssistant();
+    }
+  });
+}
+if (closeLiveAssistantBtn) closeLiveAssistantBtn.addEventListener("click", stopLiveAssistant);
+if (stopLiveAssistantBtn) stopLiveAssistantBtn.addEventListener("click", stopLiveAssistant);
+
+if (askAboutScreenBtn) {
+  askAboutScreenBtn.addEventListener("click", () => {
+    const dataUrl = captureScreenFrame();
+    if (!dataUrl) {
+      addMessage("assistant", "Couldn't capture the screen yet — give it a second and try again.");
+      return;
+    }
+    const fakeFile = { name: `screen-${Date.now()}.png`, size: Math.round(dataUrl.length * 0.75) };
+    pendingAttachments.push({ id: `${Date.now()}-screen`, file: fakeFile, kind: "image", dataUrl });
+    renderFileChips();
+    if (chatInput && !chatInput.value.trim()) {
+      chatInput.value = "What can you tell me about what's on my screen?";
+    }
+    if (chatInput) chatInput.focus();
+  });
+}
