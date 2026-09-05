@@ -24,6 +24,7 @@
   --scroll-thumb-hover: #6b7086;
 }
 
+/* ---------- Light theme overrides ---------- */
 :root[data-theme="light"] {
   --bg: #f5f6fa;
   --panel: #ffffff;
@@ -49,6 +50,7 @@ html, body {
   html, body { height: 100dvh; }
 }
 
+/* Thin, subtle scrollbars (Claude-style: minimal, barely-there until hovered) */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) transparent;
@@ -80,6 +82,7 @@ html, body {
   .app-shell { height: 100dvh; }
 }
 
+/* ---------- Sidebar ---------- */
 .sidebar {
   position: relative;
   width: var(--sidebar-width);
@@ -135,10 +138,10 @@ html, body {
   margin-bottom: 14px; flex-shrink: 0;
 }
 .brand { display: flex; align-items: center; gap: 8px; }
-.brand-logo svg { width: 28px; height: 28px; }
+.brand-logo svg { width: 26px; height: 26px; }
 .brand-name {
   font-weight: 800; font-size: 16.5px; letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #7c5cff, #ff5cbd, #4f9dff);
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 
@@ -174,6 +177,13 @@ html, body {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--text-secondary); margin: 4px 4px 6px; flex-shrink: 0;
 }
+.sidebar-section-label.archived-label {
+  cursor: pointer;
+  margin-top: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  user-select: none;
+}
+.sidebar-section-label.archived-label:hover { color: var(--text); }
 
 .conversation-list {
   flex: 1;
@@ -210,7 +220,7 @@ html, body {
   border-radius: 5px; line-height: 1;
 }
 .conversation-actions button:hover { background: var(--border); color: var(--text); opacity: 1; }
-.conversation-pin-icon.active { opacity: 1; }
+.conversation-pin-icon.active { opacity: 1; filter: drop-shadow(0 0 0 var(--accent-1)); }
 .conversation-delete:hover { color: var(--error) !important; }
 
 .sidebar-bottom { flex-shrink: 0; padding-top: 10px; border-top: 1px solid var(--border); margin-top: 8px; position: relative; }
@@ -242,6 +252,8 @@ html, body {
 .account-switcher-caret {
   flex-shrink: 0; color: var(--text-secondary); transition: transform 0.15s ease;
 }
+.account-switcher-popover.open ~ .user-profile-bar .account-switcher-caret,
+.user-profile-bar.switcher-open .account-switcher-caret { transform: rotate(180deg); }
 
 .user-avatar-initials {
   width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
@@ -254,6 +266,7 @@ html, body {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
 
+/* Logout button — only visible once the user is actually signed in */
 .logout-btn {
   display: none;
   background: transparent; border: none; color: var(--text-secondary);
@@ -277,6 +290,7 @@ html, body {
 }
 .user-badge { font-size: 11px; color: var(--text-secondary); }
 
+/* ---------- Account switcher popover ---------- */
 .account-switcher-popover {
   display: none;
   position: absolute;
@@ -317,12 +331,14 @@ html, body {
 }
 .account-switcher-add:hover { border-color: var(--accent-1); color: var(--text); }
 
+/* ---------- Mobile overlay behaviour ---------- */
 .sidebar-overlay {
   display: none;
   position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 15;
 }
 .sidebar-overlay.visible { display: block; }
 
+/* ---------- Main panel ---------- */
 .main-panel {
   flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%;
 }
@@ -356,6 +372,9 @@ html, body {
 
 .message { display: flex; gap: 12px; align-items: flex-start; }
 .message-user { flex-direction: row-reverse; }
+
+/* AI messages no longer show a circular avatar icon in front of them —
+   just the reply bubble, full width, for a cleaner look */
 .message-ai { display: block; }
 
 .avatar {
@@ -370,6 +389,7 @@ html, body {
   font-weight: 700;
 }
 .avatar-user.has-image { background: transparent; }
+.avatar-user svg { width: 16px; height: 16px; }
 
 .bubble {
   max-width: 78%;
@@ -380,32 +400,16 @@ html, body {
 }
 .message-ai .bubble { background: transparent; border: none; padding: 4px 0; max-width: 100%; }
 .message-user .bubble { background: var(--bubble-user-msg); color: #fff; border-top-right-radius: 4px; white-space: normal; }
-
-/* User message edit container */
-.user-msg-content-wrap {
-  display: flex; flex-direction: column; align-items: flex-end; max-width: 100%;
-}
-.user-msg-edit-area {
-  width: 100%; min-width: 240px; background: var(--bg); color: var(--text);
-  border: 1px solid var(--accent-1); border-radius: 10px; padding: 8px;
-  font-family: inherit; font-size: 14px; resize: none; outline: none; margin-bottom: 4px;
-}
-.user-msg-edit-buttons { display: flex; gap: 6px; }
-.user-msg-edit-buttons button {
-  padding: 4px 10px; font-size: 11.5px; border-radius: 6px; cursor: pointer;
-  border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
-}
-.user-msg-edit-buttons button.save-edit-btn { background: var(--accent-1); color: #fff; border: none; }
+.error-break { border-color: var(--error) !important; color: var(--error); }
 
 /* Generated image bubble */
 .bubble img.ai-generated-image {
   max-width: 100%;
-  width: min(480px, 100%);
+  width: min(420px, 100%);
   border-radius: 12px;
   margin-top: 6px;
   display: block;
   border: 1px solid var(--border);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
 }
 .generated-image-actions {
   display: flex; gap: 8px; margin-top: 8px;
@@ -418,6 +422,7 @@ html, body {
 }
 .generated-image-actions button:hover { border-color: var(--accent-1); }
 
+/* Attached (user-sent) file previews inside message bubbles */
 .attached-files-in-bubble {
   display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;
 }
@@ -431,6 +436,7 @@ html, body {
   background: rgba(255,255,255,0.12); font-size: 12px;
 }
 
+/* Markdown styling inside AI bubbles */
 .bubble h1, .bubble h2, .bubble h3 {
   color: var(--text);
   font-weight: 700;
@@ -452,18 +458,18 @@ html, body {
 .bubble th { background: var(--panel-2); color: var(--text); }
 .bubble strong { font-weight: 700; }
 
-.msg-actions, .user-msg-actions {
+/* Message action toolbar: copy / feedback / share / read aloud */
+.msg-actions {
   display: flex; align-items: center; gap: 2px;
-  margin-top: 4px;
+  margin-top: 4px; padding-left: 0;
 }
-.user-msg-actions { justify-content: flex-end; }
-.msg-actions button, .user-msg-actions button {
+.msg-actions button {
   background: transparent; border: none; color: var(--text-secondary);
   width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background 0.15s, color 0.15s;
 }
-.msg-actions button:hover, .user-msg-actions button:hover { background: var(--panel-2); color: var(--text); }
+.msg-actions button:hover { background: var(--panel-2); color: var(--text); }
 .msg-actions button.active-feedback-up { color: var(--success); }
 .msg-actions button.active-feedback-down { color: var(--error); }
 
@@ -475,6 +481,7 @@ html, body {
 }
 .quick-btn:hover { border-color: var(--accent-1); }
 
+/* ---------- Image generation control bar ---------- */
 .image-gen-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 8px 4px; margin: 0 4px 6px; flex-shrink: 0;
@@ -488,6 +495,7 @@ html, body {
 }
 .aspect-btn.active { border-color: var(--accent-1); color: var(--text); background: color-mix(in srgb, var(--accent-1) 16%, transparent); }
 
+/* ---------- Attached file chips (multi-file, with thumbnails) ---------- */
 .file-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 4px 8px; }
 .file-chips:empty { display: none; margin: 0; }
 .file-chip {
@@ -540,12 +548,14 @@ html, body {
 
 .disclaimer { text-align: center; font-size: 11.5px; color: var(--text-secondary); margin: 0 0 8px; flex-shrink: 0; }
 
+/* ---------- Header icon grouping ---------- */
 .header-icon-group {
   display: flex; align-items: center; gap: 2px;
   padding: 2px; border-radius: 10px; border: 1px solid var(--border);
   margin-right: 2px;
 }
 
+/* ---------- Share popover (header: share current chat) ---------- */
 .share-popover {
   display: none;
   position: absolute;
@@ -583,7 +593,12 @@ html, body {
 }
 .share-stop-btn:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .share-stop-btn[disabled] { opacity: 0.4; cursor: default; }
+.share-stop-btn[disabled]:hover { background: transparent; }
 
+/* Per-conversation share icon reuses .conversation-actions button styling */
+.conversation-share-icon.shared { color: var(--accent-1); opacity: 1; }
+
+/* ---------- Live Assistant floating panel (screen share) ---------- */
 .live-assistant-panel {
   display: none;
   position: fixed;
@@ -619,6 +634,7 @@ html, body {
   display: flex; gap: 8px; padding: 10px;
 }
 
+/* ---------- Shared-chat read-only viewer ---------- */
 .shared-view-overlay {
   display: none;
   position: fixed; inset: 0; z-index: 60;
@@ -653,6 +669,7 @@ html, body {
 }
 .footer-dot { opacity: 0.5; }
 
+/* ---------- Settings modal ---------- */
 .settings-overlay {
   display: none;
   position: fixed; inset: 0; z-index: 50;
@@ -687,7 +704,9 @@ html, body {
   background: var(--bubble-user); color: #fff; font-weight: 700; font-size: 15px;
 }
 .btn-small { padding: 6px 10px; font-size: 12px; }
+.settings-note { color: var(--text-secondary); font-size: 12px; border-top: 1px solid var(--border); }
 
+/* 3-way theme segmented control (Light / Dark / Auto) */
 .theme-segmented {
   display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; flex-shrink: 0;
 }
@@ -699,10 +718,12 @@ html, body {
 .theme-seg-btn:last-child { border-right: none; }
 .theme-seg-btn.active { background: color-mix(in srgb, var(--accent-1) 22%, transparent); color: var(--text); }
 
+/* Account/logout/security rows inside settings — only shown once signed in */
 .settings-row-logout { display: none; }
 .app-shell.signed-in .settings-row-logout { display: flex; }
 #settings-logout-btn:hover { color: var(--error); border-color: var(--error); }
 
+/* ---------- Mobile ---------- */
 @media (max-width: 800px) {
   .sidebar {
     position: fixed; top: 0; left: 0; z-index: 20; height: 100%;
@@ -715,20 +736,20 @@ html, body {
   .sidebar-open-float { display: none !important; }
   .sidebar-resize-handle { display: none; }
   .bubble { max-width: 88%; }
-  .conversation-actions { opacity: 1; }
+  .conversation-actions { opacity: 1; } /* always visible on touch devices, no hover state */
 }
 
 @media (max-width: 480px) {
-  .app-header { padding: 8px 10px; gap: 3px; }
-  .header-title { font-size: 12.5px; }
-  .chat-messages-inner { padding: 12px 8px; gap: 12px; }
-  .chat-bottom { padding: 0 8px; }
-  .bubble { max-width: 95%; font-size: 13.5px; padding: 9px 12px; }
-  .quick-prompts { gap: 5px; padding: 0 2px 6px; }
-  .quick-btn { font-size: 11.5px; padding: 6px 9px; }
-  .chat-input-bar { padding: 5px 6px; gap: 2px; border-radius: 14px; }
-  .chat-input-bar textarea { font-size: 13.5px; }
-  .input-icon-btn, .send-btn { width: 28px; height: 28px; }
-  .msg-actions button, .user-msg-actions button { width: 22px; height: 22px; }
+  .app-header { padding: 10px 12px; gap: 4px; }
+  .header-title { font-size: 13px; }
+  .chat-messages-inner { padding: 14px 10px; gap: 14px; }
+  .chat-bottom { padding: 0 10px; }
+  .bubble { max-width: 94%; font-size: 14px; }
+  .quick-prompts { gap: 6px; padding: 0 2px 8px; }
+  .quick-btn { font-size: 12px; padding: 7px 10px; }
+  .chat-input-bar { padding: 6px 8px; gap: 3px; border-radius: 16px; }
+  .chat-input-bar textarea { font-size: 14px; }
+  .input-icon-btn, .send-btn { width: 30px; height: 30px; }
+  .msg-actions button { width: 24px; height: 24px; }
   .settings-panel { padding: 14px; }
 }
