@@ -1,6 +1,8 @@
 /**
  * Aura AI — Frontend logic with Markdown Tables & Headings parser
- * + Persistent chat history (sidebar) + initials avatar
+ * + Persistent chat history (sidebar, pin/archive)
+ * + Image generation, voice input/output, message actions (copy/feedback/share)
+ * + Clerk auth actions (logout, add account, security/2FA management)
  */
 
 const API_BASE = "https://aqsa-aura-ai.aqsasarfraz732.workers.dev";
@@ -22,6 +24,17 @@ const searchChatsInput = document.getElementById("search-chats");
 const userButton = document.getElementById("user-button");
 const userNameDisplay = document.getElementById("user-name-display");
 
+// Input bar extra controls
+const micBtn = document.getElementById("mic-btn");
+const imageGenBtn = document.getElementById("image-gen-btn");
+const voiceOutputToggle = document.getElementById("voice-output-toggle");
+
+// Auth action buttons
+const logoutBtn = document.getElementById("logout-btn");
+const settingsLogoutBtn = document.getElementById("settings-logout-btn");
+const addAccountBtn = document.getElementById("add-account-btn");
+const securitySettingsBtn = document.getElementById("security-settings-btn");
+
 // Settings modal elements
 const openSettingsBtn = document.getElementById("open-settings-btn");
 const closeSettingsBtn = document.getElementById("close-settings-btn");
@@ -38,6 +51,9 @@ const lockSignUpBtn = document.getElementById("lock-sign-up-btn");
 
 let isSending = false;
 let isVoiceOutputEnabled = false;
+let isImageMode = false;
+let isRecording = false;
+let recognition = null;
 let activeConversationId = null;
 let conversations = [];
 
@@ -127,6 +143,7 @@ if (settingsOverlay) {
   });
 }
 
+// ---------- Theme (dark/light) ----------
 if (themeToggleBtn) {
   themeToggleBtn.addEventListener("click", () => {
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
@@ -139,6 +156,12 @@ if (themeToggleBtn) {
     }
   });
 }
+
+// Restore saved theme on load (before paint-critical stuff runs)
+(function applySavedTheme() {
+  const saved = localStorage.getItem("aura-theme");
+  if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
+})();
 
 if (avatarFileInput) {
   avatarFileInput.addEventListener("change", () => {
@@ -165,12 +188,6 @@ if (removeAvatarBtn) {
     renderUserAvatar();
   });
 }
-
-// Restore saved theme on load
-(function applySavedTheme() {
-  const saved = localStorage.getItem("aura-theme");
-  if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
-})();
 
 // ---------- Clerk auth state (hides Sign In/Sign Up once actually signed in) ----------
 function updateAuthUI(user) {
@@ -225,6 +242,39 @@ if (signUpBtn) signUpBtn.addEventListener("click", openClerkSignUp);
 if (lockSignInBtn) lockSignInBtn.addEventListener("click", openClerkSignIn);
 if (lockSignUpBtn) lockSignUpBtn.addEventListener("click", openClerkSignUp);
 
+// ---------- Logout ----------
+function handleLogout() {
+  if (!window.Clerk) return;
+  window.Clerk.signOut()
+    .then(() => {
+      updateAuthUI(null);
+    })
+    .catch((err) => console.error("Sign out failed", err));
+}
+if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
+if (settingsLogoutBtn) {
+  settingsLogoutBtn.addEventListener("click", () => {
+    handleLogout();
+    closeSettings();
+  });
+}
+
+// ---------- Add account (requires "multi-session" enabled in Clerk Dashboard) ----------
+if (addAccountBtn) {
+  addAccountBtn.addEventListener("click", () => {
+    if (!window.Clerk) return;
+    window.Clerk.openSignIn({ afterSignInUrl: window.location.href });
+  });
+}
+
+// ---------- Security / two-step verification (managed inside Clerk's own profile UI) ----------
+if (securitySettingsBtn) {
+  securitySettingsBtn.addEventListener("click", () => {
+    if (!window.Clerk) return;
+    window.Clerk.openUserProfile();
+  });
+}
+
 // ---------- Persistence ----------
 function saveConversationsToStorage() {
   localStorage.setItem("aura_conversations", JSON.stringify(conversations));
@@ -235,6 +285,11 @@ function loadConversationsFromStorage() {
   if (saved) {
     try {
       conversations = JSON.parse(saved);
+      // Backfill fields for chats saved before pin/archive existed
+      conversations.forEach((c) => {
+        if (typeof c.pinned !== "boolean") c.pinned = false;
+        if (typeof c.archived !== "boolean") c.archived = false;
+      });
     } catch (e) {
       console.error("Storage error", e);
       conversations = [];
@@ -247,51 +302,129 @@ window.addEventListener("load", () => {
   loadConversationsFromStorage();
 });
 
-// ---------- Sidebar: conversation list rendering ----------
+// ---------- Sidebar: conversation list rendering (with pin + archive) ----------
+function makeSectionLabel(text, collapsible = false) {
+  const label = document.createElement("div");
+  label.className = "sidebar-section-label" + (collapsible ? " archived-label" : "");
+  label.textContent = collapsible ? `${text} ▾` : text;
+  return label;
+}
+
+function buildConversationItem(conv) {
+  const item = document.createElement("div");
+  item.className =
+    "conversation-item" +
+    (conv.id === activeConversationId ? " active" : "") +
+    (conv.pinned ? " pinned" : "");
+  item.dataset.id = conv.id;
+
+  const title = document.createElement("span");
+  title.className = "conversation-title";
+  title.textContent = conv.title;
+
+  const actions = document.createElement("div");
+  actions.className = "conversation-actions";
+
+  const pinBtn = document.createElement("button");
+  pinBtn.className = "conversation-pin-icon" + (conv.pinned ? " active" : "");
+  pinBtn.setAttribute("aria-label", conv.pinned ? "Unpin chat" : "Pin chat");
+  pinBtn.title = conv.pinned ? "Unpin" : "Pin";
+  pinBtn.innerHTML = "📌";
+  pinBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    togglePin(conv.id);
+  });
+
+  const archiveBtn = document.createElement("button");
+  archiveBtn.setAttribute("aria-label", conv.archived ? "Unarchive chat" : "Archive chat");
+  archiveBtn.title = conv.archived ? "Unarchive" : "Archive";
+  archiveBtn.innerHTML = conv.archived ? "📤" : "🗄️";
+  archiveBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleArchive(conv.id);
+  });
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "conversation-delete";
+  delBtn.setAttribute("aria-label", "Delete chat");
+  delBtn.innerHTML = "✕";
+  delBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    deleteConversation(conv.id);
+  });
+
+  actions.appendChild(pinBtn);
+  actions.appendChild(archiveBtn);
+  actions.appendChild(delBtn);
+
+  item.appendChild(title);
+  item.appendChild(actions);
+  item.addEventListener("click", () => loadConversation(conv.id));
+  return item;
+}
+
 function renderConversationList(filterText = "") {
   if (!conversationList) return;
   conversationList.innerHTML = "";
 
-  const filtered = filterText
-    ? conversations.filter((c) => c.title.toLowerCase().includes(filterText.toLowerCase()))
-    : conversations;
+  const term = filterText.toLowerCase();
+  const matches = (c) => !term || c.title.toLowerCase().includes(term);
 
-  if (filtered.length === 0) {
+  const visible = conversations.filter((c) => !c.archived && matches(c));
+  const pinned = visible.filter((c) => c.pinned);
+  const recent = visible.filter((c) => !c.pinned);
+  const archived = conversations.filter((c) => c.archived && matches(c));
+
+  if (pinned.length === 0 && recent.length === 0) {
     const empty = document.createElement("div");
     empty.className = "conversation-empty";
     empty.id = "conversation-empty";
     empty.textContent = conversations.length === 0 ? "No chats yet" : "No matching chats";
     conversationList.appendChild(empty);
-    return;
+  } else {
+    if (pinned.length) {
+      conversationList.appendChild(makeSectionLabel("Pinned"));
+      pinned.forEach((c) => conversationList.appendChild(buildConversationItem(c)));
+    }
+    if (recent.length) {
+      if (pinned.length) conversationList.appendChild(makeSectionLabel("Chats"));
+      recent.forEach((c) => conversationList.appendChild(buildConversationItem(c)));
+    }
   }
 
-  filtered.forEach((conv) => {
-    const item = document.createElement("div");
-    item.className = "conversation-item" + (conv.id === activeConversationId ? " active" : "");
-    item.dataset.id = conv.id;
-
-    const title = document.createElement("span");
-    title.className = "conversation-title";
-    title.textContent = conv.title;
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "conversation-delete";
-    delBtn.setAttribute("aria-label", "Delete chat");
-    delBtn.innerHTML = "✕";
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteConversation(conv.id);
-    });
-
-    item.appendChild(title);
-    item.appendChild(delBtn);
-    item.addEventListener("click", () => loadConversation(conv.id));
-    conversationList.appendChild(item);
-  });
+  if (archived.length) {
+    const archLabel = makeSectionLabel(`Archived (${archived.length})`, true);
+    const archContainer = document.createElement("div");
+    archContainer.className = "archived-container hidden";
+    archived.forEach((c) => archContainer.appendChild(buildConversationItem(c)));
+    archLabel.addEventListener("click", () => archContainer.classList.toggle("hidden"));
+    conversationList.appendChild(archLabel);
+    conversationList.appendChild(archContainer);
+  }
 }
 
 function getActiveConversation() {
   return conversations.find((c) => c.id === activeConversationId) || null;
+}
+
+function togglePin(id) {
+  const conv = conversations.find((c) => c.id === id);
+  if (!conv) return;
+  conv.pinned = !conv.pinned;
+  saveConversationsToStorage();
+  renderConversationList(searchChatsInput ? searchChatsInput.value : "");
+}
+
+function toggleArchive(id) {
+  const conv = conversations.find((c) => c.id === id);
+  if (!conv) return;
+  conv.archived = !conv.archived;
+  saveConversationsToStorage();
+  if (activeConversationId === id && conv.archived) {
+    startNewChat();
+  } else {
+    renderConversationList(searchChatsInput ? searchChatsInput.value : "");
+  }
 }
 
 function loadConversation(id) {
@@ -303,7 +436,7 @@ function loadConversation(id) {
   if (chatMessagesInner) chatMessagesInner.innerHTML = "";
 
   (conv.messages || []).forEach((msg) => {
-    renderMessageBubble(msg.role, msg.text);
+    renderMessageBubble(msg.role, msg.text, msg);
   });
 
   if (quickPromptsContainer) {
@@ -354,6 +487,34 @@ if (searchChatsInput) {
     renderConversationList(searchChatsInput.value);
   });
 }
+
+// ---------- Mobile sidebar open/close wiring ----------
+(function wireSidebarToggles() {
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("sidebar-overlay");
+  const openBtn = document.getElementById("sidebar-open");
+  const openFloatBtn = document.getElementById("sidebar-open-float");
+  const closeBtn = document.getElementById("sidebar-close");
+
+  function openSidebar() {
+    if (sidebar) sidebar.classList.add("open");
+    if (overlay) overlay.classList.add("visible");
+    if (appShell) appShell.classList.remove("sidebar-collapsed");
+  }
+  function collapseSidebar() {
+    if (window.innerWidth <= 800) {
+      if (sidebar) sidebar.classList.remove("open");
+      if (overlay) overlay.classList.remove("visible");
+    } else if (appShell) {
+      appShell.classList.add("sidebar-collapsed");
+    }
+  }
+
+  if (openBtn) openBtn.addEventListener("click", openSidebar);
+  if (openFloatBtn) openFloatBtn.addEventListener("click", openSidebar);
+  if (closeBtn) closeBtn.addEventListener("click", collapseSidebar);
+  if (overlay) overlay.addEventListener("click", collapseSidebar);
+})();
 
 // ---------- Markdown Parser (Supports Headings, Tables, Lists, Bold) ----------
 function renderMarkdown(raw) {
@@ -420,6 +581,13 @@ function inlineMd(text) {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>");
 }
 
+function stripMarkdownForSpeech(text) {
+  return text
+    .replace(/[#*`_>|]/g, "")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, " ");
+}
+
 function scrollToBottom() {
   if (!chatWindow) return;
   requestAnimationFrame(() => {
@@ -427,8 +595,96 @@ function scrollToBottom() {
   });
 }
 
+// ---------- Message action toolbar (copy / feedback / share / read aloud) ----------
+function buildMessageActions(text, extra = {}) {
+  const bar = document.createElement("div");
+  bar.className = "msg-actions";
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.title = "Copy";
+  copyBtn.setAttribute("aria-label", "Copy response");
+  copyBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>';
+  copyBtn.addEventListener("click", () => {
+    const toCopy = extra.imageUrl ? extra.imageUrl : text;
+    navigator.clipboard
+      .writeText(toCopy)
+      .then(() => {
+        const original = copyBtn.title;
+        copyBtn.title = "Copied!";
+        setTimeout(() => (copyBtn.title = original), 1500);
+      })
+      .catch(() => {});
+  });
+
+  const upBtn = document.createElement("button");
+  upBtn.type = "button";
+  upBtn.title = "Good response";
+  upBtn.setAttribute("aria-label", "Good response");
+  upBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M2 21h2a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H2v11Zm19.83-9.6c.11-.25.17-.53.17-.82V9a2 2 0 0 0-2-2h-5.5l.85-4.11.02-.22c0-.38-.15-.72-.4-.97L13.99 1 7.5 7.5C7.19 7.81 7 8.24 7 8.71V19c0 1.1.9 2 2 2h9a2 2 0 0 0 1.83-1.19l3-6.99Z"/></svg>';
+
+  const downBtn = document.createElement("button");
+  downBtn.type = "button";
+  downBtn.title = "Bad response";
+  downBtn.setAttribute("aria-label", "Bad response");
+  downBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M22 3h-2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h2V3ZM2.17 12.6c-.11.25-.17.53-.17.82V15a2 2 0 0 0 2 2h5.5l-.85 4.11-.02.22c0 .38.15.72.4.97L10.01 23 16.5 16.5c.31-.31.5-.74.5-1.21V5c0-1.1-.9-2-2-2H6a2 2 0 0 0-1.83 1.19l-3 6.99Z"/></svg>';
+
+  upBtn.addEventListener("click", () => {
+    const nowActive = !upBtn.classList.contains("active-feedback-up");
+    upBtn.classList.toggle("active-feedback-up", nowActive);
+    downBtn.classList.remove("active-feedback-down");
+  });
+  downBtn.addEventListener("click", () => {
+    const nowActive = !downBtn.classList.contains("active-feedback-down");
+    downBtn.classList.toggle("active-feedback-down", nowActive);
+    upBtn.classList.remove("active-feedback-up");
+  });
+
+  const shareBtn = document.createElement("button");
+  shareBtn.type = "button";
+  shareBtn.title = "Share";
+  shareBtn.setAttribute("aria-label", "Share response");
+  shareBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A3 3 0 1 0 6 14.7l7.13 4.15c-.05.21-.08.43-.08.65a2.99 2.99 0 1 0 4.95-2.42Z"/></svg>';
+  shareBtn.addEventListener("click", async () => {
+    const shareText = extra.imageUrl ? extra.imageUrl : text;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Aura AI", text: shareText });
+      } catch (e) {
+        /* user cancelled share sheet — ignore */
+      }
+    } else {
+      navigator.clipboard.writeText(shareText).catch(() => {});
+      const original = shareBtn.title;
+      shareBtn.title = "Copied to share!";
+      setTimeout(() => (shareBtn.title = original), 1500);
+    }
+  });
+
+  const speakBtn = document.createElement("button");
+  speakBtn.type = "button";
+  speakBtn.title = "Read aloud";
+  speakBtn.setAttribute("aria-label", "Read response aloud");
+  speakBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3Zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Z"/></svg>';
+  speakBtn.addEventListener("click", () => {
+    if (!extra.imageUrl) speakText(text);
+  });
+
+  bar.appendChild(copyBtn);
+  bar.appendChild(upBtn);
+  bar.appendChild(downBtn);
+  bar.appendChild(shareBtn);
+  if (!extra.imageUrl) bar.appendChild(speakBtn);
+  return bar;
+}
+
 // Renders a bubble WITHOUT touching storage (used when replaying saved history)
-function renderMessageBubble(role, text) {
+function renderMessageBubble(role, text, extra = {}) {
   if (!chatMessagesInner) return;
   const wrapper = document.createElement("div");
   wrapper.className = `message ${role === "user" ? "message-user" : "message-ai"}`;
@@ -452,34 +708,46 @@ function renderMessageBubble(role, text) {
   bubble.className = "bubble";
   if (role === "user") {
     bubble.textContent = text;
+  } else if (extra.imageUrl) {
+    const img = document.createElement("img");
+    img.className = "ai-generated-image";
+    img.src = extra.imageUrl;
+    img.alt = extra.imagePrompt || "Generated image";
+    img.loading = "lazy";
+    bubble.appendChild(img);
   } else {
     bubble.innerHTML = renderMarkdown(text);
   }
 
   wrapper.appendChild(avatar);
   wrapper.appendChild(bubble);
+
+  if (role !== "user") {
+    wrapper.appendChild(buildMessageActions(text, extra));
+  }
+
   chatMessagesInner.appendChild(wrapper);
 }
 
 // Renders a bubble AND saves it into the active conversation's history
-function addMessage(role, text) {
-  renderMessageBubble(role, text);
+function addMessage(role, text, extra = {}) {
+  renderMessageBubble(role, text, extra);
   scrollToBottom();
 
   const conv = getActiveConversation();
   if (conv) {
     conv.messages = conv.messages || [];
-    conv.messages.push({ role, text });
+    conv.messages.push({ role, text, ...extra });
     saveConversationsToStorage();
   }
 }
 
-function addTypingIndicator() {
+function addTypingIndicator(label = "Thinking...") {
   if (!chatMessagesInner) return;
   const wrapper = document.createElement("div");
   wrapper.className = "message message-ai";
   wrapper.id = "typing-indicator";
-  wrapper.innerHTML = `<div class="avatar avatar-ai">✨</div><div class="bubble">Thinking...</div>`;
+  wrapper.innerHTML = `<div class="avatar avatar-ai">✨</div><div class="bubble">${label}</div>`;
   chatMessagesInner.appendChild(wrapper);
   scrollToBottom();
 }
@@ -489,19 +757,149 @@ function removeTypingIndicator() {
   if (el) el.remove();
 }
 
+// ---------- Voice output (text-to-speech) ----------
+function speakText(text) {
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(text));
+  window.speechSynthesis.speak(utterance);
+}
+
+if (voiceOutputToggle) {
+  voiceOutputToggle.addEventListener("click", () => {
+    isVoiceOutputEnabled = !isVoiceOutputEnabled;
+    voiceOutputToggle.classList.toggle("active", isVoiceOutputEnabled);
+    voiceOutputToggle.title = isVoiceOutputEnabled
+      ? "Voice replies: on (AI speaks answers aloud)"
+      : "Voice replies (AI speaks answers aloud)";
+    if (!isVoiceOutputEnabled && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+  });
+}
+
+// ---------- Voice input (speech-to-text) ----------
+function initSpeechRecognition() {
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognitionCtor) return null;
+
+  const rec = new SpeechRecognitionCtor();
+  rec.lang = "en-US";
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    if (chatInput) {
+      chatInput.value = chatInput.value ? `${chatInput.value} ${transcript}` : transcript;
+      chatInput.focus();
+    }
+  };
+  rec.onend = () => {
+    isRecording = false;
+    if (micBtn) micBtn.classList.remove("active");
+  };
+  rec.onerror = () => {
+    isRecording = false;
+    if (micBtn) micBtn.classList.remove("active");
+  };
+  return rec;
+}
+
+if (micBtn) {
+  micBtn.addEventListener("click", () => {
+    if (!recognition) recognition = initSpeechRecognition();
+    if (!recognition) {
+      addMessage("assistant", "Voice input isn't supported in this browser. Try Chrome or Edge.");
+      return;
+    }
+    if (isRecording) {
+      recognition.stop();
+      isRecording = false;
+      micBtn.classList.remove("active");
+    } else {
+      try {
+        recognition.start();
+        isRecording = true;
+        micBtn.classList.add("active");
+      } catch (e) {
+        /* already started — ignore */
+      }
+    }
+  });
+}
+
+// ---------- Image generation mode ----------
+if (imageGenBtn) {
+  imageGenBtn.addEventListener("click", () => {
+    isImageMode = !isImageMode;
+    imageGenBtn.classList.toggle("active", isImageMode);
+    imageGenBtn.title = isImageMode
+      ? "Image generation mode: on"
+      : "Generate an image instead of text";
+    if (chatInput) {
+      chatInput.placeholder = isImageMode
+        ? "Describe the image you want to generate..."
+        : "Message Aura AI...";
+    }
+  });
+}
+
+function preloadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => reject(new Error("Image failed to load"));
+    img.src = url;
+  });
+}
+
+async function sendImageGenerationRequest(prompt) {
+  addTypingIndicator("Generating image...");
+  try {
+    const seed = Math.floor(Math.random() * 1000000);
+    const imageUrl = `${IMAGE_API}${encodeURIComponent(prompt)}?width=768&height=768&seed=${seed}&nologo=true`;
+    await preloadImage(imageUrl);
+    removeTypingIndicator();
+    addMessage("assistant", `Here's your generated image for: "${prompt}"`, {
+      imageUrl,
+      imagePrompt: prompt,
+    });
+  } catch (err) {
+    removeTypingIndicator();
+    addMessage(
+      "assistant",
+      "Couldn't generate that image. Please try a different prompt or check your connection."
+    );
+  } finally {
+    isSending = false;
+    if (sendBtn) sendBtn.disabled = false;
+    if (chatInput) chatInput.focus();
+  }
+}
+
+// ---------- Sending messages ----------
+function ensureActiveConversation(promptText) {
+  if (activeConversationId) return;
+  activeConversationId = Date.now().toString();
+  const autoTitle = promptText.length > 25 ? promptText.substring(0, 25) + "..." : promptText;
+  conversations.unshift({
+    id: activeConversationId,
+    title: autoTitle,
+    messages: [],
+    pinned: false,
+    archived: false,
+  });
+  saveConversationsToStorage();
+  if (headerTitle) headerTitle.textContent = autoTitle;
+}
+
 async function sendMessage(text) {
   if (!text.trim() || isSending) return;
-
-  if (!activeConversationId) {
-    activeConversationId = Date.now().toString();
-    const userText = text.trim();
-    const autoTitle = userText.length > 25 ? userText.substring(0, 25) + "..." : userText;
-    conversations.unshift({ id: activeConversationId, title: autoTitle, messages: [] });
-    saveConversationsToStorage();
-    if (headerTitle) headerTitle.textContent = autoTitle;
-  }
-
   const userText = text.trim();
+
+  ensureActiveConversation(userText);
+
   isSending = true;
   if (sendBtn) sendBtn.disabled = true;
   if (quickPromptsContainer) quickPromptsContainer.classList.add("hidden");
@@ -509,6 +907,12 @@ async function sendMessage(text) {
   addMessage("user", userText);
   renderConversationList(searchChatsInput ? searchChatsInput.value : "");
   chatInput.value = "";
+
+  if (isImageMode) {
+    await sendImageGenerationRequest(userText);
+    return;
+  }
+
   addTypingIndicator();
 
   try {
@@ -527,6 +931,7 @@ async function sendMessage(text) {
     }
 
     addMessage("assistant", data.response);
+    if (isVoiceOutputEnabled) speakText(data.response);
   } catch (err) {
     removeTypingIndicator();
     addMessage("assistant", "Couldn't reach Aura AI. Check your internet connection.");
